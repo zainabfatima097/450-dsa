@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, render_template, request, send_file
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.extensions import limiter
+from app.extensions import limiter, cache
 from app.platforms.fetchers import (
     fetch_coding_ninjas,
     fetch_gfg,
@@ -128,6 +128,9 @@ def sync_platforms():
     update_fields["external_totals"] = totals
     db.user.update_one({"_id": user_id}, {"$set": update_fields})
     current_user.reload()
+
+    cache.clear()
+    
     return jsonify({"success": True})
 
 
