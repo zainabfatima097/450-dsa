@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from flask import Flask
 
 from app.auth import auth_bp
-from app.extensions import bcrypt, db, limiter, login_manager, mongo, oauth
+from app.extensions import bcrypt, db, limiter, login_manager, mongo, oauth, cache
 from app.leaderboard import leaderboard_bp
 from app.profile import profile_bp
 from app.search import search_bp
@@ -19,6 +19,10 @@ def create_app():
     app = Flask(__name__, template_folder="../templates")
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")
     app.config["MONGO_URI"] = os.environ.get("MONGO_URI", "mongodb://localhost:27017/450_dsa")
+    app.config["CACHE_TYPE"] = "SimpleCache"
+    app.config["CACHE_DEFAULT_TIMEOUT"] = 300
+    
+    cache.init_app(app)
 
     # Initialize extensions
     mongo.init_app(app)
