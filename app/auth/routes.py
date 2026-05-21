@@ -1,6 +1,6 @@
 from bson import ObjectId
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
-from flask_login import UserMixin, current_user, login_user, logout_user
+from flask_login import UserMixin, current_user, login_required, login_user, logout_user
 
 from app.extensions import bcrypt, db, github, google, login_manager
 from app.utils import utc_now
@@ -100,6 +100,21 @@ def register():
 @auth_bp.route("/logout")
 def logout():
     logout_user()
+    return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/delete_account", methods=["POST"])
+@login_required
+def delete_account():
+    password = request.form.get("password")
+    user_doc = db.user.find_one({"_id": current_user.id})
+    if user_doc.get("password") and not bcrypt.check_password_hash(user_doc["password"], password):
+        flash("Incorrect password. Account not deleted.", "danger")
+        return redirect(url_for("profile.profile"))
+    user_id = current_user.id
+    logout_user()
+    db.user.delete_one({"_id": user_id})
+    flash("Your account has been permanently deleted.", "info")
     return redirect(url_for("auth.login"))
 
 
