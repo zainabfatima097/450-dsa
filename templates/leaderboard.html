@@ -268,6 +268,22 @@ let totalPages = 1;
 let currentUserRank = null;
 let isLoading = false;
 
+function escapeHTML(str) {
+  if (typeof str !== 'string' && typeof str !== 'number') return '';
+  str = String(str);
+  return str.replace(/[&<>"']/g, function(c) {
+    return '&#' + c.charCodeAt(0) + ';';
+  });
+}
+
+function safeURL(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? url : '';
+  } catch { return ''; }
+}
+
 function getScoreLabel(mode) {
   if (mode === 'cscore') return 'C-Score';
   if (mode === 'questions') return 'Solved';
@@ -285,9 +301,9 @@ function getScoreClass(mode) {
 
 function avatarHTML(entry, size = 36) {
   if (entry.profile_photo) {
-    return `<img src="${entry.profile_photo}" alt="${entry.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    return `<img src="${safeURL(entry.profile_photo)}" alt="${escapeHTML(entry.name)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
   }
-  return (entry.name || '?')[0].toUpperCase();
+  return escapeHTML((entry.name || '?')[0].toUpperCase());
 }
 
 async function loadLeaderboard(page = 1) {
@@ -338,12 +354,12 @@ function renderTable(entries, mode) {
     else if (mode === 'college') score = e.c_score;
     
     const nameHTML = isCollegeMode
-      ? `${e.college}`
-      : `${e.name}${isMe ? '<span class="me-tag">YOU</span>' : ''}`;
+      ? `${escapeHTML(e.college)}`
+      : `${escapeHTML(e.name)}${isMe ? '<span class="me-tag">YOU</span>' : ''}`;
     
     const subtitleHTML = isCollegeMode
-      ? `${e.member_count} coder${e.member_count === 1 ? '' : 's'} · Top: ${e.top_user?.name || 'N/A'}`
-      : (e.college || '—');
+      ? `${e.member_count} coder${e.member_count === 1 ? '' : 's'} · Top: ${escapeHTML(e.top_user?.name || 'N/A')}`
+      : (escapeHTML(e.college) || '—');
     
     const dsaHTML = `<span class="stat-badge dsa">${e.dsa_done} / 450</span>`;
     
@@ -377,7 +393,7 @@ function renderTable(entries, mode) {
     html += `<tr class="current-user-pinned me-row">
       <td colspan="5" style="text-align: center; padding: 12px;">
         <i class="bi bi-pin-angle-fill" style="color: var(--accent);"></i> 
-        You are ranked #${currentUserRank} in this category. 
+        You are ranked #${escapeHTML(currentUserRank)} in this category. 
         <a href="?page=${Math.ceil(currentUserRank / 20)}">Go to your rank →</a>
       </td>
     </tr>`;
