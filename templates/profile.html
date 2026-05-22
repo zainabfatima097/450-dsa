@@ -589,7 +589,15 @@ window.handleQuickSync = function(btn) {
     btn.disabled = false;
     icon.className = 'bi bi-arrow-clockwise';
     if(res.success){
-      showToast('✅ Synced successfully! Reloading...');
+      const platforms = res.platforms || {};
+      const labels = {leetcode:'LeetCode',github:'GitHub',gfg:'GFG',hackerrank:'HackerRank',codingninjas:'Coding Ninjas'};
+      const synced = Object.keys(platforms).filter(k => platforms[k].status === 'synced').map(k => labels[k] || k);
+      const failed = Object.keys(platforms).filter(k => platforms[k].status === 'failed').map(k => labels[k] || k);
+      if(res.partial_success){
+        showToast('⚠️ Partial sync. Synced: ' + synced.join(', ') + '. Failed: ' + failed.join(', ') + '. Reloading...');
+      } else {
+        showToast('✅ Synced successfully! Reloading...');
+      }
       setTimeout(()=>window.location.reload(), 1200);
     } else {
       showToast('❌ Sync failed: ' + (res.error || 'unknown'));
@@ -649,12 +657,25 @@ window.handleSyncProfile = function(btn){
     overlay.style.display='none';
     if(res.success){
       syncContent.innerHTML='<i class="bi bi-check-lg"></i> Synced!';
-      showToast('\u2705 Synced successfully! Reloading...');
+      const platforms = res.platforms || {};
+      const labels = {leetcode:'LeetCode',github:'GitHub',gfg:'GFG',hackerrank:'HackerRank',codingninjas:'Coding Ninjas'};
+      const synced = Object.keys(platforms).filter(k => platforms[k].status === 'synced').map(k => labels[k] || k);
+      const failed = Object.keys(platforms).filter(k => platforms[k].status === 'failed').map(k => labels[k] || k);
+      if(res.partial_success){
+        showToast('⚠️ Partial sync. Synced: ' + synced.join(', ') + '. Failed: ' + failed.join(', ') + '. Reloading...');
+      } else {
+        showToast('\u2705 Synced successfully! Reloading...');
+      }
       setTimeout(()=>window.location.reload(),1200);
     }else{
       btn.disabled=false;
       syncContent.innerHTML='<i class="bi bi-arrow-repeat"></i> Sync Activity';
-      showToast('\u274c Sync failed: '+(res.error||'unknown'));
+      if(res.platforms){
+        showToast('\u274c Sync failed: '+(res.error||'unknown')+'. Check platform statuses in console.');
+        console.warn('Sync platform statuses:', res.platforms);
+      } else {
+        showToast('\u274c Sync failed: '+(res.error||'unknown'));
+      }
     }
   })
   .catch(err=>{

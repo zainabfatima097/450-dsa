@@ -30,6 +30,20 @@ from progress_export import build_progress_csv
 profile_bp = Blueprint("profile", __name__)
 
 
+def build_sync_platforms_response(platform_status: dict):
+    attempted = sum(1 for value in platform_status.values() if value.get("status") != "skipped")
+    synced = sum(1 for value in platform_status.values() if value.get("status") == "synced")
+    failed = sum(1 for value in platform_status.values() if value.get("status") == "failed")
+    partial_success = bool(synced and failed)
+
+    if attempted == 0:
+        return {"success": False, "error": "No platforms provided to sync.", "platforms": platform_status}
+    if synced == 0 and failed > 0:
+        return {"success": False, "error": "Sync failed for all platforms.", "platforms": platform_status}
+
+    return {"success": True, "partial_success": partial_success, "platforms": platform_status}
+
+
 @profile_bp.route("/sync_platforms", methods=["POST"])
 @login_required
 @limiter.limit("5 per minute")
@@ -76,47 +90,97 @@ def sync_platforms():
 
     combined = {}
     totals = {}
+    platform_status = {}
+
+    def _mark(platform_key: str, status: str, error: str = None):
+        payload = {"status": status}
+        if error:
+            payload["error"] = error
+        platform_status[platform_key] = payload
+
     if lc_user:
-        lc = fetch_leetcode(lc_user)
-        for key, value in lc.get("calendar", {}).items():
-            combined[key] = combined.get(key, 0) + value
-        if lc.get("total"):
-            totals["LeetCode"] = lc.get("total")
-        if lc.get("difficulty"):
-            totals["LeetCode_Easy"] = lc["difficulty"].get("Easy", 0)
-            totals["LeetCode_Medium"] = lc["difficulty"].get("Medium", 0)
-            totals["LeetCode_Hard"] = lc["difficulty"].get("Hard", 0)
-        if lc.get("contest"):
-            totals["LeetCode_Contests"] = lc["contest"].get("attendedContestsCount", 0)
-            totals["LeetCode_Rating"] = int(lc["contest"].get("rating", 0))
-            totals["LeetCode_GlobalRank"] = lc["contest"].get("globalRanking", 0)
+        try:
+            lc = fetch_leetcode(lc_user)
+            if not lc:
+                _mark("leetcode", "failed", "No data returned (username may be invalid or rate-limited).")
+            else:
+                _mark("leetcode", "synced")
+                for key, value in lc.get("calendar", {}).items():
+                    combined[key] = combined.get(key, 0) + value
+                if lc.get("total") is not None:
+                    totals["LeetCode"] = lc.get("total")
+                if lc.get("difficulty"):
+                    totals["LeetCode_Easy"] = lc["difficulty"].get("Easy", 0)
+                    totals["LeetCode_Medium"] = lc["difficulty"].get("Medium", 0)
+                    totals["LeetCode_Hard"] = lc["difficulty"].get("Hard", 0)
+                if lc.get("contest"):
+                    totals["LeetCode_Contests"] = lc["contest"].get("attendedContestsCount", 0)
+                    totals["LeetCode_Rating"] = int(lc["contest"].get("rating", 0))
+                    totals["LeetCode_GlobalRank"] = lc["contest"].get("globalRanking", 0)
 
-        rating_history = fetch_leetcode_rating_history(lc_user)
-        if rating_history:
-            update_fields["rating_history"] = rating_history
+                try:
+                    rating_history = fetch_leetcode_rating_history(lc_user)
+                    if rating_history:
+                        update_fields["rating_history"] = rating_history
+                except Exception:
+                    pass
 
-        lc_badges = fetch_lc_badges(lc_user)
-        update_fields["lc_badges_json"] = json.dumps(lc_badges)
+                try:
+                    lc_badges = fetch_lc_badges(lc_user)
+                    update_fields["lc_badges_json"] = json.dumps(lc_badges)
+                except Exception:
+                    pass
+        except Exception:
+            _mark("leetcode", "failed", "Failed to fetch LeetCode stats.")
+    else:
+        _mark("leetcode", "skipped")
 
     if gh_user:
-        gh = fetch_github(gh_user)
-        for key, value in gh.get("calendar", {}).items():
-            combined[key] = combined.get(key, 0) + value
-        if gh.get("stats"):
-            totals["GitHub_Issues"] = gh["stats"]["issues"]
-            totals["GitHub_PRs"] = gh["stats"]["prs"]
-            totals["GitHub_Merged_PRs"] = gh["stats"]["merged_prs"]
-            totals["GitHub_Commits"] = gh["stats"]["commits"]
+        try:
+            gh = fetch_github(gh_user)
+            if not gh:
+                _mark("github", "failed", "No data returned (username may be invalid or rate-limited).")
+            else:
+                _mark("github", "synced")
+                for key, value in gh.get("calendar", {}).items():
+                    combined[key] = combined.get(key, 0) + value
+                if gh.get("stats"):
+                    totals["GitHub_Issues"] = gh["stats"]["issues"]
+                    totals["GitHub_PRs"] = gh["stats"]["prs"]
+                    totals["GitHub_Merged_PRs"] = gh["stats"]["merged_prs"]
+                    totals["GitHub_Commits"] = gh["stats"]["commits"]
+        except Exception:
+            _mark("github", "failed", "Failed to fetch GitHub stats.")
+    else:
+        _mark("github", "skipped")
 
     if gfg_user:
-        gfg = fetch_gfg(gfg_user)
-        if gfg.get("total"):
-            totals["GFG"] = int(gfg.get("total", 0))
+        try:
+            gfg = fetch_gfg(gfg_user)
+            if not gfg:
+                _mark("gfg", "failed", "No data returned (username may be invalid or rate-limited).")
+            else:
+                _mark("gfg", "synced")
+                if gfg.get("total") is not None:
+                    totals["GFG"] = int(gfg.get("total", 0))
+        except Exception:
+            _mark("gfg", "failed", "Failed to fetch GFG stats.")
+    else:
+        _mark("gfg", "skipped")
 
     if cn_user:
-        cn = fetch_coding_ninjas(cn_user)
-        if cn.get("total"):
-            totals["Coding Ninjas"] = int(cn.get("total", 0))
+        try:
+            cn = fetch_coding_ninjas(cn_user)
+            if not cn:
+                _mark("codingninjas", "failed", "No data returned (username may be invalid or rate-limited).")
+            else:
+                _mark("codingninjas", "synced")
+                if cn.get("total") is not None:
+                    totals["Coding Ninjas"] = int(cn.get("total", 0))
+        except Exception:
+            _mark("codingninjas", "failed", "Failed to fetch Coding Ninjas stats.")
+    else:
+        _mark("codingninjas", "skipped")
 
     if hr_user:
         try:
@@ -124,8 +188,11 @@ def sync_platforms():
             update_fields["hr_badges_json"] = json.dumps(hr_badges)
             if hr_solved > 0:
                 totals["HackerRank"] = hr_solved
+            _mark("hackerrank", "synced")
         except Exception:
-            print("Unable to fetch HackerRank badges")
+            _mark("hackerrank", "failed", "Failed to fetch HackerRank stats.")
+    else:
+        _mark("hackerrank", "skipped")
 
     update_fields["external_daily_counts"] = combined
     update_fields["external_totals"] = totals
@@ -133,8 +200,7 @@ def sync_platforms():
     current_user.reload()
 
     cache.clear()
-    
-    return jsonify({"success": True})
+    return jsonify(build_sync_platforms_response(platform_status))
 
 
 @profile_bp.route("/edit_profile", methods=["POST"])
