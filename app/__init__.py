@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 
+from app.admin import admin_bp
 from app.auth import auth_bp
 from app.extensions import bcrypt, db, limiter, login_manager, mongo, oauth, cache
 from app.leaderboard import leaderboard_bp
@@ -97,11 +98,29 @@ def create_app():
     app.add_template_filter(platform_name_filter, "platform_name")
     app.add_template_filter(platform_color_filter, "platform_color")
 
-    app.register_blueprint(auth_bp)
+        app.register_blueprint(auth_bp)
+    app.register_blueprint(faq_bp)  
     app.register_blueprint(tracker_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(leaderboard_bp)
     app.register_blueprint(search_bp)
+    app.register_blueprint(admin_bp)
+    app.register_blueprint(public_bp)
+
+    # Initialize Discord webhook collection
+    try:
+        from app.discord_webhook import DiscordWebhookConfig
+        # Get the actual MongoDB database from mongo (not db proxy)
+        actual_db = mongo.db
+        # Ensure discord_webhooks collection exists
+        if "discord_webhooks" not in actual_db.list_collection_names():
+            actual_db.create_collection("discord_webhooks")
+            actual_db.discord_webhooks.create_index("created_at")
+            actual_db.discord_webhooks.create_index("is_active")
+            actual_db.discord_webhooks.create_index("events")
+        print("✅ Discord webhook collection ready")
+    except Exception as e:
+        print(f"⚠️ Discord webhook initialization skipped: {e}")
 
     @app.errorhandler(429)
     def ratelimit_handler(e):
@@ -114,6 +133,17 @@ def create_app():
         })
         response.status_code = 429
         response.headers['Retry-After'] = str(retry_after)
+        return response
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "img-src 'self' data: https:;"
+        )
         return response
 
     return app

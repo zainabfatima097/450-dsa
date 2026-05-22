@@ -24,6 +24,7 @@ from app.platforms.fetchers import (
 )
 from app.utils import ensure_utc_datetime, normalize_coding_ninjas_profile_id, utc_now
 from profile_validation import build_profile_updates
+from progress_export import build_progress_csv
 
 # THIS LINE IS IMPORTANT - defines the blueprint
 profile_bp = Blueprint("profile", __name__)
