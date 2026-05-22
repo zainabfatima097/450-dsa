@@ -165,7 +165,17 @@
                 </td>
             </tr>
             {% endfor %}
-        </tbody>
+            <tr id="empty-state-row" style="display:none;">
+                <td colspan="6" class="text-center" style="padding: 2rem;">
+                <p style="margin-bottom: 0.75rem; color: var(--text-muted, #888);">
+                    No questions match the selected difficulty.
+                </p>
+                <button class="filter-btn" data-difficulty="all" onclick="document.querySelector('[data-difficulty=all]').click()">
+                    Clear filter &amp; show all
+                </button>
+            </td>
+        </tr>
+    </tbody>
     </table>
 </div>
 
@@ -235,6 +245,13 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
         window.location.href = currentUrl.toString();
     });
 });
+(function() {
+    const rows = document.querySelectorAll('#questions-table tbody tr:not(#empty-state-row)');
+    const emptyRow = document.getElementById('empty-state-row');
+    if (rows.length === 0) {
+        emptyRow.style.display = '';
+    }
+})();
 
 // Notes Modal
 const modal = document.getElementById('notesModal');
