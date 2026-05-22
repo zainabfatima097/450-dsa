@@ -51,7 +51,7 @@ def test_create_app_preserves_routes_and_blueprints(monkeypatch):
     assert flask_app.config["MONGO_URI"] == "mongodb://localhost:27017/450_dsa"
     assert login_manager.login_view == "auth.login"
     assert registered_clients == ["github", "google"]
-    assert {"auth", "tracker", "profile", "leaderboard", "search", "admin"} <= set(flask_app.blueprints)
+    assert {"auth", "tracker", "profile", "leaderboard", "search", "admin", "public"} <= set(flask_app.blueprints)
 
     routes = {rule.rule for rule in flask_app.url_map.iter_rules()}
     assert "/" in routes
@@ -73,6 +73,7 @@ def test_create_app_preserves_routes_and_blueprints(monkeypatch):
     assert "/search_universities" in routes
     assert "/leaderboard" in routes
     assert "/api/leaderboard" in routes
+    assert "/u/<user_id>" in routes
     assert "/search" in routes
     assert "/api/search_questions" in routes
 
