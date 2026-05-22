@@ -19,7 +19,7 @@ from app.utils import platform_color_filter, platform_name_filter
 def create_app():
     load_dotenv()
 
-    app = Flask(__name__, template_folder="../templates")
+    app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")
     app.config["MONGO_URI"] = os.environ.get("MONGO_URI", "mongodb://localhost:27017/450_dsa")
     app.config["CACHE_TYPE"] = "SimpleCache"
