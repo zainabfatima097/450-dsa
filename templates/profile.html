@@ -513,11 +513,14 @@
     </div>
     <p style="font-size:.83rem;color:var(--text-secondary);margin-bottom:16px">This action is <strong style="color:#ef4444">permanent and irreversible</strong>. All your progress, bookmarks, notes, and profile data will be deleted.</p>
     <form method="POST" action="/delete_account" id="deleteAccountForm">
-      <label class="m-lbl" for="delete_password">Confirm your password to continue</label>
-      <input class="m-inp" type="password" id="delete_password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+      <input type="hidden" name="csrf_token" id="deleteCsrfToken">
+      <div id="deletePasswordWrap">
+        <label class="m-lbl" for="delete_password">Confirm your password to continue</label>
+        <input class="m-inp" type="password" id="delete_password" name="password" placeholder="Enter your password" autocomplete="current-password">
+      </div>
       <div class="m-actions">
         <button type="button" class="m-cancel" onclick="closeDeleteModal()">Cancel</button>
-        <button type="submit" style="padding:8px 16px;background:#ef4444;border:none;border-radius:8px;color:#fff;font-size:.83rem;font-weight:700;cursor:pointer;font-family:inherit">Delete My Account</button>
+        <button type="submit" id="deleteSubmitBtn" style="padding:8px 16px;background:#ef4444;border:none;border-radius:8px;color:#fff;font-size:.83rem;font-weight:700;cursor:pointer;font-family:inherit">Delete My Account</button>
       </div>
     </form>
   </div>
@@ -773,7 +776,25 @@ function showToast(msg){
 }
 function openEditProfile(){document.getElementById('editProfileModal').classList.add('open')}
 function closeEditProfile(){document.getElementById('editProfileModal').classList.remove('open')}
-function openDeleteModal(){document.getElementById('deleteAccountModal').classList.add('open');setTimeout(()=>document.getElementById('delete_password').focus(),100);}
+function openDeleteModal(){
+  fetch('/delete_account/token')
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('deleteCsrfToken').value = data.csrf_token;
+      const pwWrap = document.getElementById('deletePasswordWrap');
+      const pwInput = document.getElementById('delete_password');
+      if(data.is_oauth){
+        pwWrap.style.display = 'none';
+        pwInput.removeAttribute('required');
+      } else {
+        pwWrap.style.display = 'block';
+        pwInput.setAttribute('required', '');
+      }
+      document.getElementById('deleteAccountModal').classList.add('open');
+      setTimeout(() => (data.is_oauth ? document.getElementById('deleteSubmitBtn') : pwInput).focus(), 100);
+    })
+    .catch(() => showToast('❌ Failed to open delete dialog. Try again.'));
+}
 function closeDeleteModal(){document.getElementById('deleteAccountModal').classList.remove('open');document.getElementById('delete_password').value='';}
 
 ['syncModal','cardModal','editProfileModal','deleteAccountModal'].forEach(id=>{
