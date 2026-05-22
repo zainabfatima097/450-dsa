@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from bson import ObjectId
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import session
 from flask_login import current_user, login_required
 
 from app.decorators import admin_required
@@ -153,6 +154,11 @@ def dashboard():
 def delete_user(user_id):
     search_term = (request.form.get("q") or request.args.get("q") or "").strip()
     page = max(_safe_int(request.form.get("page") or request.args.get("page"), 1), 1)
+
+    form_token = request.form.get("csrf_token", "")
+    session_token = session.get("csrf_token", "")
+    if not form_token or not session_token or form_token != session_token:
+        abort(400)
 
     if not ObjectId.is_valid(user_id):
         flash("Invalid user id.", "danger")

@@ -31,6 +31,12 @@ def login_as(client, user_id):
         session["_fresh"] = True
 
 
+def set_csrf_token(client, token="test-csrf-token"):
+    with client.session_transaction() as session:
+        session["csrf_token"] = token
+    return token
+
+
 def test_admin_dashboard_redirects_when_not_logged_in(monkeypatch):
     flask_app, _ = create_test_app(monkeypatch)
 
@@ -113,7 +119,12 @@ def test_admin_cannot_delete_self(monkeypatch):
 
     with flask_app.test_client() as client:
         login_as(client, admin_id)
-        response = client.post(f"/admin/users/{admin_id}/delete", data={"q": "", "page": 1}, follow_redirects=True)
+        csrf_token = set_csrf_token(client)
+        response = client.post(
+            f"/admin/users/{admin_id}/delete",
+            data={"q": "", "page": 1, "csrf_token": csrf_token},
+            follow_redirects=True,
+        )
 
     assert response.status_code == 200
     assert test_db.user.find_one({"_id": ObjectId(str(admin_id))}) is not None
@@ -141,11 +152,44 @@ def test_admin_can_delete_other_user(monkeypatch):
 
     with flask_app.test_client() as client:
         login_as(client, admin_id)
-        response = client.post(f"/admin/users/{victim_id}/delete", data={"q": "", "page": 1}, follow_redirects=True)
+        csrf_token = set_csrf_token(client)
+        response = client.post(
+            f"/admin/users/{victim_id}/delete",
+            data={"q": "", "page": 1, "csrf_token": csrf_token},
+            follow_redirects=True,
+        )
 
     assert response.status_code == 200
     assert test_db.user.find_one({"_id": victim_id}) is None
     assert "Deleted account for Spam Bot." in response.data.decode("utf-8")
+
+
+def test_admin_delete_rejects_missing_csrf(monkeypatch):
+    flask_app, test_db = create_test_app(monkeypatch)
+    admin_id = test_db.user.insert_one(
+        {
+            "name": "Main Admin",
+            "email": "admin@example.com",
+            "is_admin": True,
+            "progress": {},
+        }
+    ).inserted_id
+    victim_id = test_db.user.insert_one(
+        {
+            "name": "Victim",
+            "email": "victim@example.com",
+            "is_admin": False,
+            "progress": {},
+        }
+    ).inserted_id
+
+    with flask_app.test_client() as client:
+        login_as(client, admin_id)
+        set_csrf_token(client)
+        response = client.post(f"/admin/users/{victim_id}/delete", data={"q": "", "page": 1})
+
+    assert response.status_code == 400
+    assert test_db.user.find_one({"_id": victim_id}) is not None
 
 
 def test_non_admin_cannot_delete_users(monkeypatch):

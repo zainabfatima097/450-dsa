@@ -1,13 +1,16 @@
 import json
 import os
+import secrets
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, session
 
 from app.admin import admin_bp
 from app.auth import auth_bp
+from app.faq import faq_bp
 from app.extensions import bcrypt, db, limiter, login_manager, mongo, oauth, cache
 from app.leaderboard import leaderboard_bp
+from app.web.routes import public_bp
 from app.profile import profile_bp
 from app.search import search_bp
 from app.tracker import tracker_bp
@@ -17,13 +20,37 @@ from app.utils import platform_color_filter, platform_name_filter
 def create_app():
     load_dotenv()
 
-    app = Flask(__name__, template_folder="../templates")
+    app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "supersecretkey")
     app.config["MONGO_URI"] = os.environ.get("MONGO_URI", "mongodb://localhost:27017/450_dsa")
     app.config["CACHE_TYPE"] = "SimpleCache"
     app.config["CACHE_DEFAULT_TIMEOUT"] = 300
+    app.config["SWAGGER"] = {
+        "title": "450 DSA Tracker API",
+        "uiversion": 3,
+    }
     
     cache.init_app(app)
+    Swagger(
+        app,
+        template={
+            "swagger": "2.0",
+            "info": {
+                "title": "450 DSA Tracker API",
+                "description": "API documentation for search, leaderboard, progress, and profile endpoints.",
+                "version": "1.0.0",
+            },
+            "basePath": "/",
+            "securityDefinitions": {
+                "SessionAuth": {
+                    "type": "apiKey",
+                    "name": "session",
+                    "in": "cookie",
+                    "description": "Flask-Login session cookie.",
+                },
+            },
+        },
+    )
 
     # Initialize extensions
     mongo.init_app(app)
@@ -59,9 +86,14 @@ def create_app():
         db.user.create_index("email", unique=True, sparse=True)
         db.user.create_index("github_id", unique=True, sparse=True)
         db.user.create_index("google_id", unique=True, sparse=True)
+        db.user.create_index("is_admin")
         db.topic.create_index("name", unique=True)
+        db.question.create_index([("problem", "text")], name="problem_text")
     except Exception:
         pass  # Skip indexes if using mock DB
+
+    # Lightweight schema backfill for legacy user documents.
+    db.user.update_many({"is_admin": {"$exists": False}}, {"$set": {"is_admin": False}})
 
     data_path = os.path.abspath(os.path.join(app.root_path, os.pardir, "data.json"))
     app._db_initialized = False
@@ -98,7 +130,18 @@ def create_app():
     app.add_template_filter(platform_name_filter, "platform_name")
     app.add_template_filter(platform_color_filter, "platform_color")
 
-        app.register_blueprint(auth_bp)
+    @app.context_processor
+    def inject_csrf_token():
+        def csrf_token():
+            token = session.get("csrf_token")
+            if not token:
+                token = secrets.token_urlsafe(32)
+                session["csrf_token"] = token
+            return token
+
+        return {"csrf_token": csrf_token}
+
+    app.register_blueprint(auth_bp)
     app.register_blueprint(faq_bp)  
     app.register_blueprint(tracker_bp)
     app.register_blueprint(profile_bp)
