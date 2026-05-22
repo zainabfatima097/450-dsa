@@ -108,9 +108,10 @@ def logout():
 @auth_bp.route("/delete_account", methods=["POST"])
 @login_required
 def delete_account():
-    # CSRF check
+    # CSRF check — consume token immediately (single-use)
     token = request.form.get("csrf_token", "")
-    if not token or token != session.get("delete_csrf_token"):
+    expected = session.pop("delete_csrf_token", None)
+    if not token or not expected or token != expected:
         abort(403)
 
     user_doc = db.user.find_one({"_id": current_user.id})
@@ -126,7 +127,6 @@ def delete_account():
             return redirect(url_for("profile.profile"))
 
     user_id = current_user.id
-    session.pop("delete_csrf_token", None)
     logout_user()
     db.user.delete_one({"_id": user_id})
     flash("Your account has been permanently deleted.", "info")
@@ -140,7 +140,8 @@ def delete_account_token():
     token = secrets.token_hex(32)
     session["delete_csrf_token"] = token
     from flask import jsonify
-    return jsonify({"csrf_token": token, "is_oauth": not bool(db.user.find_one({"_id": current_user.id}, {"password": 1}).get("password"))})
+    user_doc = db.user.find_one({"_id": current_user.id}, {"password": 1}) or {}
+    return jsonify({"csrf_token": token, "is_oauth": not bool(user_doc.get("password"))})
 
 
 @auth_bp.route("/login/github")
