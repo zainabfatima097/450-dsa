@@ -24,6 +24,7 @@ def create_app():
     
     cache.init_app(app)
 
+    # Initialize extensions
     mongo.init_app(app)
     bcrypt.init_app(app)
     login_manager.init_app(app)
@@ -52,10 +53,14 @@ def create_app():
         client_kwargs={"scope": "openid email profile"},
     )
 
-    db.user.create_index("email", unique=True, sparse=True)
-    db.user.create_index("github_id", unique=True, sparse=True)
-    db.user.create_index("google_id", unique=True, sparse=True)
-    db.topic.create_index("name", unique=True)
+    # Create indexes (skip if using mock)
+    try:
+        db.user.create_index("email", unique=True, sparse=True)
+        db.user.create_index("github_id", unique=True, sparse=True)
+        db.user.create_index("google_id", unique=True, sparse=True)
+        db.topic.create_index("name", unique=True)
+    except Exception:
+        pass  # Skip indexes if using mock DB
 
     data_path = os.path.abspath(os.path.join(app.root_path, os.pardir, "data.json"))
     app._db_initialized = False
@@ -69,12 +74,15 @@ def create_app():
                 topic_id = result.inserted_id
                 questions = []
                 for question in topic["questions"]:
+                    # ADDED: difficulty field
+                    difficulty = question.get("difficulty", "Medium")
                     questions.append(
                         {
                             "topic": topic_id,
                             "problem": question["Problem"],
                             "url": question["URL"],
                             "url2": question.get("URL2", ""),
+                            "difficulty": difficulty,  # <-- NEW FIELD
                         }
                     )
                 if questions:
