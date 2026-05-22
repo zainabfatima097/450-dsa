@@ -204,3 +204,4 @@ def add_security_headers(response):
     )
     return response
 
+    return app
