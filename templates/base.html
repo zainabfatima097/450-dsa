@@ -303,7 +303,120 @@
             border-color: #333;
         }
 
-        /* ─── Flash Messages ─── */
+        /* ─── Toast Notifications - TOP RIGHT ─── */
+        .toast-container {
+            position: fixed;
+            top: calc(var(--topbar-height) + 12px);
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 380px;
+        }
+
+        .toast-notification {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 14px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border-left: 4px solid;
+            animation: toastSlideIn 0.3s ease;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .toast-notification:hover {
+            transform: translateX(-4px);
+        }
+
+        .toast-notification.success {
+            border-left-color: var(--success);
+            background: linear-gradient(135deg, var(--bg-card), rgba(34, 197, 94, 0.05));
+        }
+        .toast-notification.success .toast-icon { color: var(--success); }
+
+        .toast-notification.error {
+            border-left-color: var(--danger);
+            background: linear-gradient(135deg, var(--bg-card), rgba(239, 68, 68, 0.05));
+        }
+        .toast-notification.error .toast-icon { color: var(--danger); }
+
+        .toast-notification.info {
+            border-left-color: var(--info);
+            background: linear-gradient(135deg, var(--bg-card), rgba(59, 130, 246, 0.05));
+        }
+        .toast-notification.info .toast-icon { color: var(--info); }
+
+        .toast-notification.warning {
+            border-left-color: var(--warning);
+            background: linear-gradient(135deg, var(--bg-card), rgba(245, 158, 11, 0.05));
+        }
+        .toast-notification.warning .toast-icon { color: var(--warning); }
+
+        .toast-icon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 700;
+            font-size: 0.85rem;
+            margin-bottom: 2px;
+        }
+
+        .toast-message {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 2px;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+
+        .toast-close:hover {
+            color: var(--text-primary);
+        }
+
+        @keyframes toastSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes toastSlideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+        }
+
+        /* Flash messages (legacy, kept for backward compatibility) */
         .flash-messages {
             position: fixed;
             top: calc(var(--topbar-height) + 12px);
@@ -327,36 +440,11 @@
             cursor: pointer;
         }
 
-        .flash-alert.success {
-            background: rgba(34, 197, 94, 0.15);
-            border: 1px solid rgba(34, 197, 94, 0.3);
-            color: #4ade80;
-        }
-
-        .flash-alert.danger {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            color: #f87171;
-        }
-
-        .flash-alert.warning {
-            background: rgba(245, 158, 11, 0.15);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            color: #fbbf24;
-        }
-
-        .flash-alert.info {
-            background: rgba(59, 130, 246, 0.15);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            color: #60a5fa;
-        }
-
         @keyframes slideIn {
             from {
                 opacity: 0;
                 transform: translateX(20px);
             }
-
             to {
                 opacity: 1;
                 transform: translateX(0);
@@ -504,13 +592,8 @@
                 padding: 5px 10px;
             }
         }
-
-            {
-            # page-specific CSS only #
-        }
     </style>
     {% block head %}{% endblock %}
-    <!-- Prevent flash of wrong theme -->
     <script>
         if (localStorage.getItem('theme') === 'light') {
             document.documentElement.style.setProperty('--bg-primary', '#f0f2f5');
@@ -529,25 +612,21 @@
     <aside class="sidebar" role="navigation" aria-label="Main navigation">
         <a href="{{ url_for('tracker.index') }}" class="sidebar-logo" title="450 DSA">D</a>
         <nav class="sidebar-nav">
-            <a href="{{ url_for('tracker.index') }}" class="sidebar-link {% if request.endpoint == 'tracker.index' %}active{% endif %}"
-                id="nav-home">
+            <a href="{{ url_for('tracker.index') }}" class="sidebar-link {% if request.endpoint == 'tracker.index' %}active{% endif %}" id="nav-home">
                 <i class="bi bi-house-fill"></i>
                 <span class="tooltip-label">Home</span>
             </a>
             {% if current_user.is_authenticated %}
-            <a href="{{ url_for('profile.profile') }}"
-                class="sidebar-link {% if request.endpoint == 'profile.profile' %}active{% endif %}" id="nav-profile">
+            <a href="{{ url_for('profile.profile') }}" class="sidebar-link {% if request.endpoint == 'profile.profile' %}active{% endif %}" id="nav-profile">
                 <i class="bi bi-person-circle"></i>
                 <span class="tooltip-label">Profile</span>
             </a>
-            <a href="{{ url_for('tracker.bookmarks') }}"
-                class="sidebar-link {% if request.endpoint == 'tracker.bookmarks' %}active{% endif %}" id="nav-bookmarks">
+            <a href="{{ url_for('tracker.bookmarks') }}" class="sidebar-link {% if request.endpoint == 'tracker.bookmarks' %}active{% endif %}" id="nav-bookmarks">
                 <i class="bi bi-bookmark-fill"></i>
                 <span class="tooltip-label">Bookmarks</span>
             </a>
             {% endif %}
-            <a href="{{ url_for('search.search') }}"
-                class="sidebar-link {% if request.endpoint == 'search.search' %}active{% endif %}" id="nav-search">
+            <a href="{{ url_for('search.search') }}" class="sidebar-link {% if request.endpoint == 'search.search' %}active{% endif %}" id="nav-search">
                 <i class="bi bi-search"></i>
                 <span class="tooltip-label">Search</span>
             </a>
@@ -555,8 +634,7 @@
                 <i class="bi bi-bar-chart-fill"></i>
                 <span class="tooltip-label">Stats</span>
             </a>
-            <a href="{{ url_for('leaderboard.leaderboard') }}"
-                class="sidebar-link {% if request.endpoint == 'leaderboard.leaderboard' %}active{% endif %}" id="nav-leaderboard">
+            <a href="{{ url_for('leaderboard.leaderboard') }}" class="sidebar-link {% if request.endpoint == 'leaderboard.leaderboard' %}active{% endif %}" id="nav-leaderboard">
                 <i class="bi bi-trophy-fill"></i>
                 <span class="tooltip-label">Leaderboard</span>
             </a>
@@ -593,8 +671,7 @@
                 <i class="bi bi-rewind-fill" style="color: var(--accent);"></i>
                 <span>Monthly Rewind</span>
             </a>
-            <a href="https://github.com/mohitkumhar/companywise-dsa-interview-question" class="pill-btn accent"
-                id="company-kit-btn" target="_blank">
+            <a href="https://github.com/mohitkumhar/companywise-dsa-interview-question" class="pill-btn accent" id="company-kit-btn" target="_blank">
                 <i class="bi bi-briefcase-fill"></i>
                 <span>Company Wise Kit</span>
             </a>
@@ -614,14 +691,16 @@
         </div>
     </header>
 
-    <!-- ─── Flash Messages ─── -->
+    <!-- ─── Toast Container (TOP RIGHT) ─── -->
+    <div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
+
+    <!-- ─── Flash Messages (legacy) ─── -->
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
     <div class="flash-messages" id="flash-container">
         {% for category, message in messages %}
         <div class="flash-alert {{ category }}" onclick="this.remove()">
-            <i
-                class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}x-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+            <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}x-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
             {{ message }}
         </div>
         {% endfor %}
@@ -696,6 +775,7 @@
             const next = curr === 'dark' ? 'light' : 'dark';
             localStorage.setItem('theme', next);
             applyTheme(next);
+            showToast(`Switched to ${next} mode`, 'info');
         });
 
         // Auto-dismiss flash messages

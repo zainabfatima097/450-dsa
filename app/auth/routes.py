@@ -61,6 +61,7 @@ def login():
         user_doc = db.user.find_one({"email": email})
         if user_doc and user_doc.get("password") and bcrypt.check_password_hash(user_doc["password"], password):
             login_user(UserWrapper(user_doc))
+            flash(f"Welcome back, {user_doc.get('name', 'User')}! 👋", "success")
             return redirect(url_for("tracker.index"))
         flash("Login unsuccessful. Please check email and password.", "danger")
     return render_template("login.html")
@@ -154,11 +155,13 @@ def login_github():
 def authorize_github():
     token = github.authorize_access_token()
     if not token:
-        return "GitHub authorization failed", 400
+        flash("GitHub authorization failed", "danger")
+        return redirect(url_for("auth.login"))
 
     response = github.get("user")
     if not response.ok:
-        return "Failed to fetch GitHub user", 400
+        flash("Failed to fetch GitHub user", "danger")
+        return redirect(url_for("auth.login"))
 
     user_info = response.json()
     github_id = str(user_info["id"])
@@ -178,6 +181,7 @@ def authorize_github():
         if user_doc:
             db.user.update_one({"_id": user_doc["_id"]}, {"$set": {"github_id": github_id}})
             user_doc["github_id"] = github_id
+            flash(f"Linked GitHub to your account! Welcome back!", "success")
         else:
             result = db.user.insert_one(
                 {
@@ -190,6 +194,7 @@ def authorize_github():
                 }
             )
             user_doc = db.user.find_one({"_id": result.inserted_id})
+            flash(f"Welcome! Your GitHub account has been connected. 🎉", "success")
 
     login_user(UserWrapper(user_doc))
     return redirect(url_for("tracker.index"))
@@ -218,6 +223,7 @@ def authorize_google():
         if user_doc:
             db.user.update_one({"_id": user_doc["_id"]}, {"$set": {"google_id": google_id}})
             user_doc["google_id"] = google_id
+            flash(f"Linked Google to your account! Welcome back!", "success")
         else:
             result = db.user.insert_one(
                 {
@@ -230,6 +236,7 @@ def authorize_google():
                 }
             )
             user_doc = db.user.find_one({"_id": result.inserted_id})
+            flash(f"Welcome! Your Google account has been connected. 🎉", "success")
 
     login_user(UserWrapper(user_doc))
     return redirect(url_for("tracker.index"))

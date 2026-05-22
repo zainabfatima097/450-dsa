@@ -249,10 +249,14 @@ function updateQuestion(id, data, callback) {
     });
 }
 
-// Checkboxes
+// Update the checkbox event listener in topic.html
 document.querySelectorAll('.status-checkbox').forEach(cb => {
     cb.addEventListener('change', function() {
-        if (!isAuthenticated) { this.checked = !this.checked; window.location.href = "{{ url_for('auth.login') }}"; return; }
+        if (!isAuthenticated) { 
+            this.checked = !this.checked; 
+            window.location.href = "{{ url_for('auth.login') }}"; 
+            return; 
+        }
         const row = document.getElementById('row-' + this.dataset.id);
         const previousChecked = !this.checked;
         const nextChecked = this.checked;
@@ -270,10 +274,13 @@ document.querySelectorAll('.status-checkbox').forEach(cb => {
     });
 });
 
-// Bookmarks
+// Update bookmark button event listener
 document.querySelectorAll('.bookmark-btn').forEach(btn => {
     btn.addEventListener('click', function() {
-        if (!isAuthenticated) { window.location.href = "{{ url_for('auth.login') }}"; return; }
+        if (!isAuthenticated) { 
+            window.location.href = "{{ url_for('auth.login') }}"; 
+            return; 
+        }
         const isBookmarked = this.dataset.bookmarked === 'true';
         const newStatus = !isBookmarked;
         this.disabled = true;

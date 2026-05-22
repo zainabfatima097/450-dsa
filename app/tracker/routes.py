@@ -67,7 +67,6 @@ def topic(topic_id):
     # Get difficulty filter from query parameter
     difficulty_filter = request.args.get('difficulty', 'all')
     
-    # Filter questions by difficulty if needed
     if difficulty_filter != 'all':
         questions = [q for q in questions if q.get('difficulty', 'Medium') == difficulty_filter]
     
@@ -118,21 +117,33 @@ def update_question(question_id):
     update_fields = {}
     progress = current_user.progress
     existing = progress.get(question_id, {})
+    message = ""
 
     if "done" in data:
         if data["done"] and not existing.get("done"):
             update_fields[f"progress.{question_id}.timestamp"] = utc_now()
+            message = f"✅ Marked '{question.get('problem', 'Question')}' as complete!"
+        elif not data["done"] and existing.get("done"):
+            message = f"📝 Marked '{question.get('problem', 'Question')}' as incomplete"
         update_fields[f"progress.{question_id}.done"] = data["done"]
+    
     if "bookmark" in data:
+        if data["bookmark"] and not existing.get("bookmark"):
+            message = f"🔖 Added '{question.get('problem', 'Question')}' to bookmarks!"
+        elif not data["bookmark"] and existing.get("bookmark"):
+            message = f"📌 Removed '{question.get('problem', 'Question')}' from bookmarks"
         update_fields[f"progress.{question_id}.bookmark"] = data["bookmark"]
+    
     if "notes" in data:
         update_fields[f"progress.{question_id}.notes"] = data["notes"]
+        message = f"📝 Notes saved for '{question.get('problem', 'Question')}'!"
 
     if update_fields:
         db.user.update_one({"_id": user_id}, {"$set": update_fields})
         current_user.reload()
+        return jsonify({"success": True, "message": message})
 
-    return jsonify({"success": True})
+    return jsonify({"success": True, "message": "No changes made"})
 
 
 @tracker_bp.route("/bookmarks")
@@ -171,7 +182,6 @@ def export_csv():
         for topic in db.topic.find({'_id': {'$in': topic_ids}}, {'name': 1})
     }
     
-    # Create CSV
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(['Topic', 'Problem', 'Status', 'Bookmarked', 'Notes', 'Difficulty', 'URL', 'URL2'])
