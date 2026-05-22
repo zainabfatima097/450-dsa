@@ -1,6 +1,6 @@
 """Tests for the progress card generation route."""
 import io
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from bson.objectid import ObjectId
 
 import pytest
@@ -493,7 +493,6 @@ def test_public_card_response_headers(client, app):
 
 def test_public_card_cache_expiration(client, app):
     """Test that cache respects TTL."""
-    import time
     
     user_id = ObjectId()
     user_data = {
