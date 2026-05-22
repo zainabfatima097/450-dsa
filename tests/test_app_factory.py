@@ -35,6 +35,7 @@ class FakeDB:
 def test_create_app_preserves_routes_and_blueprints(monkeypatch):
     registered_clients = []
 
+    monkeypatch.setenv("MONGO_URI", "mongodb://localhost:27017/450_dsa")
     monkeypatch.setattr(app_module, "db", FakeDB())
     monkeypatch.setattr(app_module.mongo, "init_app", lambda flask_app: None)
     monkeypatch.setattr(app_module.bcrypt, "init_app", lambda flask_app: None)

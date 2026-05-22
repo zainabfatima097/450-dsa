@@ -89,7 +89,13 @@
 <div class="topic-header">
     <div class="topic-header-main">
         <div class="topic-title">{{ topic.name }}</div>
-        <div class="topic-subtitle">{{ questions | list | length }} questions in this topic</div>
+        <div class="topic-subtitle">
+            {% if difficulty_filter == 'all' %}
+                {{ total_count }} questions in this topic
+            {% else %}
+                Showing {{ questions|length }} of {{ total_count }} questions ({{ difficulty_filter }} difficulty)
+            {% endif %}
+        </div>
     </div>
     {% if current_user.is_authenticated %}
     <a href="{{ url_for('tracker.export_topic_notes', topic_id=topic._id|string) }}" class="export-notes-btn">
@@ -100,10 +106,10 @@
 
 <!-- Filter Buttons -->
 <div class="filter-buttons">
-    <button class="filter-btn {% if difficulty_filter == 'all' %}active{% endif %}" data-difficulty="all">📋 All ({{ questions|length }})</button>
-    <button class="filter-btn {% if difficulty_filter == 'Easy' %}active{% endif %}" data-difficulty="Easy">🟢 Easy</button>
-    <button class="filter-btn {% if difficulty_filter == 'Medium' %}active{% endif %}" data-difficulty="Medium">🟡 Medium</button>
-    <button class="filter-btn {% if difficulty_filter == 'Hard' %}active{% endif %}" data-difficulty="Hard">🔴 Hard</button>
+    <button class="filter-btn {% if difficulty_filter == 'all' %}active{% endif %}" data-difficulty="all">📋 All ({{ total_count }})</button>
+    <button class="filter-btn {% if difficulty_filter == 'Easy' %}active{% endif %}" data-difficulty="Easy">🟢 Easy ({{ easy_count }})</button>
+    <button class="filter-btn {% if difficulty_filter == 'Medium' %}active{% endif %}" data-difficulty="Medium">🟡 Medium ({{ medium_count }})</button>
+    <button class="filter-btn {% if difficulty_filter == 'Hard' %}active{% endif %}" data-difficulty="Hard">🔴 Hard ({{ hard_count }})</button>
 </div>
 
 <div class="topic-status" id="topicStatus" role="status" aria-live="polite"></div>

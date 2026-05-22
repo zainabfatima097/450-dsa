@@ -58,6 +58,12 @@ def topic(topic_id):
 
     questions = list(db.question.find({"topic": topic_doc["_id"]}))
     
+    # Calculate counts based on the unfiltered list of questions
+    total_count = len(questions)
+    easy_count = sum(1 for q in questions if q.get('difficulty', 'Medium') == 'Easy')
+    medium_count = sum(1 for q in questions if q.get('difficulty', 'Medium') == 'Medium')
+    hard_count = sum(1 for q in questions if q.get('difficulty', 'Medium') == 'Hard')
+    
     # Get difficulty filter from query parameter
     difficulty_filter = request.args.get('difficulty', 'all')
     
@@ -72,7 +78,11 @@ def topic(topic_id):
         topic=topic_doc, 
         questions=questions, 
         progress_dict=progress_dict,
-        difficulty_filter=difficulty_filter
+        difficulty_filter=difficulty_filter,
+        total_count=total_count,
+        easy_count=easy_count,
+        medium_count=medium_count,
+        hard_count=hard_count
     )
 
 
