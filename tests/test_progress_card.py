@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 from bson.objectid import ObjectId
 
 import pytest
+from datetime import datetime, timezone
 
 
 class FakeCollection:
@@ -23,11 +24,27 @@ class FakeCollection:
 
     def count_documents(self, *args, **kwargs):
         """Mock count_documents."""
-        return 1
+        return len(self.data)
+
+    def find(self, *args, **kwargs):
+        """Mock find."""
+        return list(self.data.values())
 
     def insert_many(self, *args, **kwargs):
         """Mock insert_many."""
         pass
+
+    class InsertResult:
+        def __init__(self, inserted_id):
+            self.inserted_id = inserted_id
+
+    def insert_one(self, document, *args, **kwargs):
+        """Mock insert_one."""
+        from bson.objectid import ObjectId
+        if "_id" not in document:
+            document["_id"] = ObjectId()
+        self.data[str(document["_id"])] = document
+        return self.InsertResult(document["_id"])
 
     def update_many(self, *args, **kwargs):
         """Mock update_many."""
@@ -94,16 +111,26 @@ def test_card_generator_returns_bytesio():
 def test_public_card_valid_user(client, app):
     """Test that /u/<user_id>/card.png returns 200 with valid user."""
     user_id = ObjectId()
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
     user_data = {
         "_id": user_id,
         "name": "Test User",
-        "c_score": 100,
-        "dsa_progress": 50,
-        "current_streak": 5,
-        "platforms": {
+        "progress": {
+            "q1": {"done": True, "timestamp": now},
+            "q2": {"done": True, "timestamp": now - timedelta(days=1)}
+        },
+        "external_totals": {
             "LeetCode": 10,
             "GFG": 5,
         }
+    }
+    
+    app.mock_db.question.data = {
+        "q1": {"_id": "q1", "url": "https://leetcode.com/"},
+        "q2": {"_id": "q2", "url": "https://geeksforgeeks.org/"},
+        "q3": {"_id": "q3", "url": ""},
+        "q4": {"_id": "q4", "url": ""}
     }
     
     app.mock_db.user.data[str(user_id)] = user_data
@@ -141,6 +168,12 @@ def test_public_card_with_minimal_data(client, app):
     user_data = {
         "_id": user_id,
         "name": "Minimal User",
+        "progress": {},
+        "external_totals": {}
+    }
+    
+    app.mock_db.question.data = {
+        "q1": {"_id": "q1"}
     }
     
     app.mock_db.user.data[str(user_id)] = user_data
@@ -157,10 +190,12 @@ def test_public_card_with_anonymous_name(client, app):
     user_id = ObjectId()
     user_data = {
         "_id": user_id,
-        "c_score": 50,
-        "dsa_progress": 25,
-        "current_streak": 2,
-        "platforms": {}
+        "progress": {"q1": {"done": True, "timestamp": datetime.now(timezone.utc)}},
+        "external_totals": {}
+    }
+    
+    app.mock_db.question.data = {
+        "q1": {"_id": "q1"}
     }
     
     app.mock_db.user.data[str(user_id)] = user_data
@@ -178,10 +213,12 @@ def test_public_card_caching(client, app):
     user_data = {
         "_id": user_id,
         "name": "Cache Test User",
-        "c_score": 75,
-        "dsa_progress": 60,
-        "current_streak": 3,
-        "platforms": {"LeetCode": 20}
+        "progress": {"q1": {"done": True, "timestamp": datetime.now(timezone.utc)}},
+        "external_totals": {"LeetCode": 20}
+    }
+    
+    app.mock_db.question.data = {
+        "q1": {"_id": "q1"}
     }
     
     app.mock_db.user.data[str(user_id)] = user_data
@@ -207,16 +244,16 @@ def test_public_card_exception_handling(client, app):
     user_data = {
         "_id": user_id,
         "name": "Error Test User",
-        "c_score": 100,
-        "dsa_progress": 100,
-        "current_streak": 100,
-        "platforms": {}
+        "progress": {},
+        "external_totals": {}
     }
+    
+    app.mock_db.question.data = {}
     
     app.mock_db.user.data[str(user_id)] = user_data
     
     with patch('app.profile.routes.db', app.mock_db), \
-         patch('app.profile.routes.generate_progress_card', side_effect=Exception("Test error")):
+         patch('card_generator.generate_progress_card', side_effect=Exception("Test error")):
         response = client.get(f"/u/{user_id}/card.png")
         
         assert response.status_code == 500
@@ -230,11 +267,11 @@ def test_card_generator_with_long_name(client, app):
     user_data = {
         "_id": user_id,
         "name": long_name,
-        "c_score": 100,
-        "dsa_progress": 100,
-        "current_streak": 100,
-        "platforms": {"LeetCode": 100, "GFG": 50, "Coding Ninjas": 30, "HackerRank": 20}
+        "progress": {},
+        "external_totals": {"LeetCode": 100, "GFG": 50, "Coding Ninjas": 30, "HackerRank": 20}
     }
+    
+    app.mock_db.question.data = {}
     
     app.mock_db.user.data[str(user_id)] = user_data
     
@@ -252,16 +289,16 @@ def test_card_generator_with_all_platforms(client, app):
     user_data = {
         "_id": user_id,
         "name": "Multi-Platform User",
-        "c_score": 500,
-        "dsa_progress": 100,
-        "current_streak": 365,
-        "platforms": {
+        "progress": {},
+        "external_totals": {
             "LeetCode": 500,
             "GFG": 300,
             "Coding Ninjas": 200,
             "HackerRank": 150
         }
     }
+    
+    app.mock_db.question.data = {}
     
     app.mock_db.user.data[str(user_id)] = user_data
     
@@ -279,11 +316,11 @@ def test_card_generator_with_zero_values(client, app):
     user_data = {
         "_id": user_id,
         "name": "Beginner User",
-        "c_score": 0,
-        "dsa_progress": 0,
-        "current_streak": 0,
-        "platforms": {}
+        "progress": {},
+        "external_totals": {}
     }
+    
+    app.mock_db.question.data = {}
     
     app.mock_db.user.data[str(user_id)] = user_data
     
@@ -439,11 +476,10 @@ def test_public_card_response_headers(client, app):
     user_data = {
         "_id": user_id,
         "name": "Header Test",
-        "c_score": 50,
-        "dsa_progress": 50,
-        "current_streak": 5,
-        "platforms": {}
+        "progress": {},
+        "external_totals": {}
     }
+    app.mock_db.question.data = {}
     
     app.mock_db.user.data[str(user_id)] = user_data
     
@@ -463,11 +499,10 @@ def test_public_card_cache_expiration(client, app):
     user_data = {
         "_id": user_id,
         "name": "Cache Expiry Test",
-        "c_score": 50,
-        "dsa_progress": 50,
-        "current_streak": 5,
-        "platforms": {}
+        "progress": {},
+        "external_totals": {}
     }
+    app.mock_db.question.data = {}
     
     app.mock_db.user.data[str(user_id)] = user_data
     

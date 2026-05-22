@@ -375,3 +375,31 @@ def build_college_leaderboard_data(entries=None):
         key=lambda item: (item["c_score"], item["total_solved"], item["member_count"]),
         reverse=True,
     )
+
+
+def compute_user_platforms(solved_items, external_totals, all_questions):
+    """Compute platform counts combining solved DSA questions with external totals."""
+    platforms = {"LeetCode": 0, "GFG": 0, "Coding Ninjas": 0, "HackerRank": 0, "Other": 0}
+    
+    for question in all_questions:
+        question_id = str(question.get("_id", ""))
+        if question_id in solved_items:
+            url = (question.get("url") or "").lower()
+            if "leetcode.com" in url:
+                platforms["LeetCode"] += 1
+            elif "geeksforgeeks.org" in url:
+                platforms["GFG"] += 1
+            elif "codingninjas.com" in url or "naukri.com/code360" in url:
+                platforms["Coding Ninjas"] += 1
+            elif "hackerrank.com" in url:
+                platforms["HackerRank"] += 1
+            else:
+                platforms["Other"] += 1
+
+    ext_totals = external_totals or {}
+    platforms["LeetCode"] = max(platforms["LeetCode"], ext_totals.get("LeetCode", 0))
+    platforms["GFG"] = max(platforms["GFG"], ext_totals.get("GFG", 0))
+    platforms["Coding Ninjas"] = max(platforms["Coding Ninjas"], ext_totals.get("Coding Ninjas", 0))
+    platforms["HackerRank"] = max(platforms["HackerRank"], ext_totals.get("HackerRank", 0))
+    
+    return platforms

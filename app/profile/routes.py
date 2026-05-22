@@ -22,7 +22,8 @@ from app.platforms.fetchers import (
     fetch_leetcode,
     fetch_leetcode_rating_history,
 )
-from app.utils import ensure_utc_datetime, normalize_coding_ninjas_profile_id, utc_now
+from app.utils import ensure_utc_datetime, normalize_coding_ninjas_profile_id, utc_now, compute_c_score, compute_user_platforms
+from streaks import compute_streak
 from profile_validation import build_profile_updates
 from progress_export import build_progress_csv
 
@@ -241,12 +242,24 @@ def public_card(user_id):
             
     try:
         name = user.get("name", "Anonymous")
-        c_score = user.get("c_score", 0)
-        dsa_progress = user.get("dsa_progress", 0)
-        current_streak = user.get("current_streak", 0)
-        platforms = user.get("platforms", {})        
+        
+        # Calculate real stats
+        stats = compute_c_score(user)
+        c_score = stats["c_score"]
+        dsa_done = stats["dsa_done"]
+        
+        total_questions = db.question.count_documents({})
+        dsa_progress = round((dsa_done / total_questions * 100) if total_questions > 0 else 0, 1)
+        
+        progress_data = user.get("progress", {})
+        current_streak, _ = compute_streak(progress_data)
+        
+        all_questions = list(db.question.find())
+        solved_items = {qid: p for qid, p in progress_data.items() if p.get("done")}
+        platforms = compute_user_platforms(solved_items, user.get("external_totals", {}), all_questions)
+
+        from card_generator import generate_progress_card
         img_io = generate_progress_card(name, c_score, dsa_progress, current_streak, platforms)
-        img_io.seek(0)
         
         card_cache[user_id] = (current_time, img_io)
         return send_file(img_io, mimetype="image/png")
@@ -325,18 +338,6 @@ def profile():
 
         question_id = str(question["_id"])
         if question_id in solved_items:
-            url = (question.get("url") or "").lower()
-            if "leetcode.com" in url:
-                platforms["LeetCode"] += 1
-            elif "geeksforgeeks.org" in url:
-                platforms["GFG"] += 1
-            elif "codingninjas.com" in url:
-                platforms["Coding Ninjas"] += 1
-            elif "hackerrank.com" in url:
-                platforms["HackerRank"] += 1
-            else:
-                platforms["Other"] += 1
-
             solved_at = solved_items[question_id].get("timestamp") or utc_now()
             day = solved_at.strftime("%Y-%m-%d")
             daily_counts[day] = daily_counts.get(day, 0) + 1
@@ -358,10 +359,7 @@ def profile():
     dsa_done = len(solved_items)
 
     ext_totals = user.external_totals or {}
-    platforms["LeetCode"] = max(platforms["LeetCode"], ext_totals.get("LeetCode", 0))
-    platforms["GFG"] = max(platforms["GFG"], ext_totals.get("GFG", 0))
-    platforms["Coding Ninjas"] = max(platforms["Coding Ninjas"], ext_totals.get("Coding Ninjas", 0))
-    platforms["HackerRank"] = max(platforms["HackerRank"], ext_totals.get("HackerRank", 0))
+    platforms = compute_user_platforms(solved_items, ext_totals, all_questions)
 
     # Use DSA difficulties for the chart
     lc_easy = dsa_easy
