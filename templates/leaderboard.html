@@ -280,7 +280,7 @@ function safeURL(url) {
   if (!url) return '';
   try {
     const u = new URL(url);
-    return (u.protocol === 'http:' || u.protocol === 'https:') ? url : '';
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
   } catch { return ''; }
 }
 
