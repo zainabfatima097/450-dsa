@@ -270,20 +270,21 @@ def public_card(user_id):
         solved_items = {qid: p for qid, p in progress_data.items() if p.get("done")}
         platforms = compute_user_platforms(solved_items, user.get("external_totals", {}), all_questions)
 
-        # Import inside the try block to ensure the patch works
-        from card_generator import generate_progress_card as gen_card
-        img_io = gen_card(name, c_score, dsa_progress, current_streak, platforms)
+        # This is where the test patches
+        img_io = generate_progress_card(name, c_score, dsa_progress, current_streak, platforms)
         
         img_io.seek(0)
         card_cache[user_id] = (current_time, img_io)
         return send_file(img_io, mimetype="image/png")
         
     except Exception as e:
-        # Clear cache
+        # Print to see if this block is reached
+        print(f"EXCEPTION CAUGHT: {e}")
+        import traceback
+        traceback.print_exc()
+        
         if user_id in card_cache:
             del card_cache[user_id]
-        # Re-raise to let the test catch it, or return 500
-        # The test expects a 500 response
         return "Internal Server Error", 500
 
 
