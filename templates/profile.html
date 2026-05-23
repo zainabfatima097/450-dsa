@@ -847,13 +847,20 @@ function handlePhotoUpload(e){
   let timer = null, activeIdx = -1;
 
   function renderItems(items){
-    dd.innerHTML = '';
+    dd.textContent = '';
     activeIdx = -1;
     if(!items.length){ dd.style.display='none'; return; }
     items.forEach((item, i) => {
       const div = document.createElement('div');
       div.style.cssText = 'padding:9px 14px;cursor:pointer;font-size:.83rem;border-bottom:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;transition:background .15s';
-      div.innerHTML = '<span style="font-weight:600;color:var(--text-primary)">' + item.name + '</span><span style="font-size:.72rem;color:var(--text-muted)">' + item.country + '</span>';
+      const name = document.createElement('span');
+      name.style.cssText = 'font-weight:600;color:var(--text-primary)';
+      name.textContent = item.name;
+      const country = document.createElement('span');
+      country.style.cssText = 'font-size:.72rem;color:var(--text-muted)';
+      country.textContent = item.country;
+      div.appendChild(name);
+      div.appendChild(country);
       div.dataset.label = item.label;
       div.addEventListener('mouseenter', () => { setActive(i); });
       div.addEventListener('click', () => { inp.value = item.label; dd.style.display='none'; });
