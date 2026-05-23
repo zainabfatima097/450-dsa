@@ -26,6 +26,7 @@ from streaks import compute_streak
 from profile_validation import build_profile_updates
 from card_generator import generate_progress_card
 
+# THIS LINE WAS MISSING - ADD IT HERE
 profile_bp = Blueprint("profile", __name__)
 
 
@@ -54,9 +55,10 @@ def build_sync_platforms_response(platform_status):
         if status.get("status") in ["synced", "failed"]
     )
     
-    # If all attempted failed, return False
+    # If all attempted failed, return False with error message
     if all_failed:
         response["success"] = False
+        response["error"] = "All platforms failed to sync"
         return response
     
     # Check if all attempted platforms succeeded
@@ -152,7 +154,6 @@ def sync_platforms():
             platform_status["leetcode"] = {"status": "synced"}
         except Exception as e:
             platform_status["leetcode"] = {"status": "failed", "error": str(e)}
-            # Don't add to totals if failed
     else:
         platform_status["leetcode"] = {"status": "skipped"}
 
@@ -277,7 +278,7 @@ def public_card(user_id):
         return send_file(img_io, mimetype="image/png")
     except Exception as e:
         print(f"Card generation error: {e}")
-        return str(e), 500
+        return "Internal Server Error", 500
 
 
 @profile_bp.route("/search_universities")
