@@ -249,6 +249,18 @@ def fetch_gfg(username):
         return {}
 
 
+def fetch_atcoder(handle):
+    try:
+        r = requests.get(
+            'https://kenkoooo.com/atcoder/atcoder-api/v3/user/acceptance_count',
+            params={'user': handle}, timeout=8)
+        if r.status_code == 200:
+            return {'total': r.json().get('count', 0)}
+    except Exception as e:
+        print(f'AtCoder Error: {e}')
+    return {}
+
+
 def fetch_coding_ninjas(username):
     """Fetch Coding Ninjas/Code360 solved count from public profile pages."""
     profile_id = normalize_coding_ninjas_profile_id(username)

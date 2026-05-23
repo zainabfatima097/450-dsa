@@ -77,8 +77,23 @@ def test_create_app_preserves_routes_and_blueprints(monkeypatch):
     assert "/u/<user_id>" in routes
     assert "/search" in routes
     assert "/api/search_questions" in routes
+    assert "/apidocs/" in routes
+    assert "/apispec_1.json" in routes
 
     question_indexes = app_module.db.question.indexes
     assert (([("problem", "text")],), {"name": "problem_text"}) in question_indexes
     assert "/admin" in routes
     assert "/admin/users/<user_id>/delete" in routes
+
+    docs_response = flask_app.test_client().get("/apidocs/")
+    assert docs_response.status_code == 200
+
+    response = flask_app.test_client().get("/apispec_1.json")
+    assert response.status_code == 200
+    spec = response.get_json()
+    assert "/api/search_questions" in spec["paths"]
+    assert "/api/leaderboard" in spec["paths"]
+    assert "/update_question/{question_id}" in spec["paths"]
+    assert "/sync_platforms" in spec["paths"]
+    assert "/edit_profile" in spec["paths"]
+    assert "/upload_photo" in spec["paths"]

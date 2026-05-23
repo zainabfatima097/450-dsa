@@ -53,6 +53,84 @@ def leaderboard():
 @leaderboard_bp.route("/api/leaderboard")
 @cache.cached(timeout=300, query_string=True)
 def api_leaderboard():
+    """Get leaderboard rankings.
+    ---
+    tags:
+      - Leaderboard
+    parameters:
+      - name: mode
+        in: query
+        type: string
+        required: false
+        default: cscore
+        enum:
+          - cscore
+          - questions
+          - rating
+          - college
+        description: Ranking mode used to sort leaderboard entries.
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+        minimum: 1
+        description: Page number for paginated results.
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 20
+        maximum: 100
+        description: Number of entries per page.
+      - name: current_user_id
+        in: query
+        type: string
+        required: false
+        description: Optional user id used to return that user's current rank.
+    responses:
+      200:
+        description: Paginated leaderboard response.
+        schema:
+          type: object
+          properties:
+            entries:
+              type: array
+              items:
+                type: object
+                properties:
+                  rank:
+                    type: integer
+                  user_id:
+                    type: string
+                  name:
+                    type: string
+                  profile_photo:
+                    type: string
+                  college:
+                    type: string
+                  c_score:
+                    type: integer
+                  total_solved:
+                    type: integer
+                  dsa_done:
+                    type: integer
+                  lc_total:
+                    type: integer
+                  lc_rating:
+                    type: integer
+            total:
+              type: integer
+            page:
+              type: integer
+            per_page:
+              type: integer
+            total_pages:
+              type: integer
+            current_user_rank:
+              type: integer
+              x-nullable: true
+    """
     mode = request.args.get("mode", "cscore")
     page = int(request.args.get("page", 1))
     per_page = min(int(request.args.get("per_page", 20)), 100)

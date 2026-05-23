@@ -3,6 +3,7 @@ import os
 import secrets
 
 from dotenv import load_dotenv
+from flasgger import Swagger
 from flask import Flask, session
 
 from app.admin import admin_bp
@@ -25,8 +26,32 @@ def create_app():
     app.config["MONGO_URI"] = os.environ.get("MONGO_URI", "mongodb://localhost:27017/450_dsa")
     app.config["CACHE_TYPE"] = "SimpleCache"
     app.config["CACHE_DEFAULT_TIMEOUT"] = 300
+    app.config["SWAGGER"] = {
+        "title": "450 DSA Tracker API",
+        "uiversion": 3,
+    }
     
     cache.init_app(app)
+    Swagger(
+        app,
+        template={
+            "swagger": "2.0",
+            "info": {
+                "title": "450 DSA Tracker API",
+                "description": "API documentation for search, leaderboard, progress, and profile endpoints.",
+                "version": "1.0.0",
+            },
+            "basePath": "/",
+            "securityDefinitions": {
+                "SessionAuth": {
+                    "type": "apiKey",
+                    "name": "session",
+                    "in": "cookie",
+                    "description": "Flask-Login session cookie.",
+                },
+            },
+        },
+    )
 
     # Initialize extensions
     mongo.init_app(app)
