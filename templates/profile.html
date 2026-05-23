@@ -61,12 +61,12 @@
 /* right panel */
 .section-title{font-size:0.88rem;font-weight:700;text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border-color)}
 .donut-wrap{position:relative;width:120px;height:120px;margin:0 auto 12px}
-.donut-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:900}
-.legend-item{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;background:var(--bg-secondary);margin-bottom:5px;font-size:0.8rem}
+.donut-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:900;color:var(--text-primary)}
+.legend-item{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;background:var(--bg-secondary);margin-bottom:5px;font-size:0.8rem;color:var(--text-primary)}
 .legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
 .rating-wrap{display:flex;align-items:center;gap:14px;padding:10px 0}
-.shield-icon{font-size:3.5rem;color:#444}
-.rating-num{font-size:2rem;font-weight:900;line-height:1}
+.shield-icon{font-size:3.5rem;color:var(--text-muted)}
+.rating-num{font-size:2rem;font-weight:900;line-height:1;color:var(--text-primary)}
 .rating-sub{font-size:0.75rem;color:var(--text-secondary)}
 /* modal */
 .modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center}
@@ -121,10 +121,8 @@
         });
       }
     </script>
-    <a class="card-btn" href="{{ url_for('profile.export_csv') }}" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary)">
-      <i class="bi bi-download" style="margin-right:6px"></i> Export Progress CSV
     <a class="card-btn" href="{{ url_for('tracker.export_csv') }}" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary)">
-    <i class="bi bi-download" style="margin-right:6px"></i> Export Progress CSV
+      <i class="bi bi-download" style="margin-right:6px"></i> Export Progress CSV
     </a>
     <div class="prof-bio">{{ user.bio or 'Software Engineer | Problem Solver | DSA Enthusiast' }}</div>
     <div class="social-row">
