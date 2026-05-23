@@ -24,9 +24,7 @@ from app.platforms.fetchers import (
 from app.utils import ensure_utc_datetime, normalize_coding_ninjas_profile_id, utc_now, compute_c_score, compute_user_platforms
 from streaks import compute_streak
 from profile_validation import build_profile_updates
-from card_generator import generate_progress_card
 
-# THIS LINE WAS MISSING - ADD IT HERE
 profile_bp = Blueprint("profile", __name__)
 
 
@@ -252,6 +250,10 @@ def public_card(user_id):
             cached_image.seek(0)
             return send_file(cached_image, mimetype="image/png")
             
+    # Import generate_progress_card inside the try block
+    # This ensures the patch works correctly
+    from card_generator import generate_progress_card
+    
     try:
         name = user.get("name", "Anonymous")
         
@@ -270,21 +272,18 @@ def public_card(user_id):
         solved_items = {qid: p for qid, p in progress_data.items() if p.get("done")}
         platforms = compute_user_platforms(solved_items, user.get("external_totals", {}), all_questions)
 
-        # This is where the test patches
         img_io = generate_progress_card(name, c_score, dsa_progress, current_streak, platforms)
-        
         img_io.seek(0)
+        
         card_cache[user_id] = (current_time, img_io)
         return send_file(img_io, mimetype="image/png")
         
     except Exception as e:
-        # Print to see if this block is reached
-        print(f"EXCEPTION CAUGHT: {e}")
-        import traceback
-        traceback.print_exc()
-        
+        print(f"Card generation error: {e}")
+        # Clear cache to prevent serving cached error
         if user_id in card_cache:
             del card_cache[user_id]
+        # Return 500 for any exception
         return "Internal Server Error", 500
 
 
