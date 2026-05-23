@@ -203,7 +203,7 @@ def test_google_links_existing_email_user(monkeypatch):
     with flask_app.test_client() as client:
         with patch("app.auth.routes.google", new=_make_google_mock()):
             with client.session_transaction() as sess:
-                sess["GOOGLE_OAUTH_NONCE_SESSION_KEY"] = "test-nonce"
+                sess["google_oauth_nonce"] = "test-nonce"
             resp = client.get("/login/google/authorize")
             assert resp.status_code == 302
             assert "google_id" in existing
@@ -217,7 +217,7 @@ def test_google_creates_new_user_when_no_match(monkeypatch):
     with flask_app.test_client() as client:
         with patch("app.auth.routes.google", new=_make_google_mock()):
             with client.session_transaction() as sess:
-                sess["GOOGLE_OAUTH_NONCE_SESSION_KEY"] = "test-nonce"
+                sess["google_oauth_nonce"] = "test-nonce"
             resp = client.get("/login/google/authorize")
             assert resp.status_code == 302
             assert inserted.get("google_id") == "google-999"
@@ -234,7 +234,7 @@ def test_google_missing_userinfo_returns_400(monkeypatch):
 
     with flask_app.test_client() as client:
         with client.session_transaction() as sess:
-            sess["GOOGLE_OAUTH_NONCE_SESSION_KEY"] = "test-nonce"
+            sess["google_oauth_nonce"] = "test-nonce"
         with patch("app.auth.routes.google", new=mock):
             resp = client.get("/login/google/authorize")
             assert resp.status_code == 400
