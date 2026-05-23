@@ -1,17 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>450 DSA Tracker</title>
     <meta name="description"
         content="Track your 450 DSA progress, connect coding platforms, and visualize your growth.">
+   
+    <link rel="stylesheet" href="{{ url_for('static', filename='js/css/main.css') }}">
+    
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">    
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
@@ -554,6 +560,13 @@
                 <i class="bi bi-trophy-fill"></i>
                 <span class="tooltip-label">Leaderboard</span>
             </a>
+            {% if current_user.is_authenticated and current_user.is_admin %}
+            <a href="{{ url_for('admin.dashboard') }}"
+                class="sidebar-link {% if request.endpoint == 'admin.dashboard' %}active{% endif %}" id="nav-admin">
+                <i class="bi bi-shield-lock-fill"></i>
+                <span class="tooltip-label">Admin</span>
+            </a>
+            {% endif %}
         </nav>
         <div class="sidebar-bottom">
             {% if current_user.is_authenticated %}
@@ -624,7 +637,7 @@
     <!-- ─── Footer ─── -->
     <footer class="site-footer">
         <div class="footer-links">
-            <a href="#">FAQ</a>
+            <a href="/faq">FAQ</a>
             <a href="#">Contact Us</a>
             <a href="#">Privacy</a>
             <a href="#">Timeline</a>
@@ -641,7 +654,9 @@
 
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        
         // Theme Toggle
         const themeToggle = document.getElementById('theme-toggle');
         const themeIcon = document.getElementById('theme-icon');

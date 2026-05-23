@@ -1,8 +1,11 @@
+import secrets
+
 from bson import ObjectId
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
-from flask_login import UserMixin, current_user, login_user, logout_user
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from flask_login import UserMixin, current_user, login_required, login_user, logout_user
 
 from app.extensions import bcrypt, db, github, google, login_manager
+from app.utils import utc_now
 
 
 auth_bp = Blueprint("auth", __name__)
@@ -24,6 +27,10 @@ class UserWrapper(UserMixin):
     @property
     def progress(self):
         return self._doc.get("progress", {})
+
+    @property
+    def is_admin(self):
+        return bool(self._doc.get("is_admin", False))
 
     def __getattr__(self, name):
         if name.startswith("_"):
@@ -75,7 +82,16 @@ def register():
 
         hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
         try:
-            db.user.insert_one({"name": name, "email": email, "password": hashed_password, "progress": {}})
+            db.user.insert_one(
+                {
+                    "name": name,
+                    "email": email,
+                    "password": hashed_password,
+                    "progress": {},
+                    "is_admin": False,
+                    "created_at": utc_now(),
+                }
+            )
             flash("Your account has been created! You can now log in.", "success")
             return redirect(url_for("auth.login"))
         except Exception:
@@ -87,6 +103,45 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/delete_account", methods=["POST"])
+@login_required
+def delete_account():
+    # CSRF check — consume token immediately (single-use)
+    token = request.form.get("csrf_token", "")
+    expected = session.pop("delete_csrf_token", None)
+    if not token or not expected or token != expected:
+        abort(403)
+
+    user_doc = db.user.find_one({"_id": current_user.id})
+    if not user_doc:
+        logout_user()
+        return redirect(url_for("auth.login"))
+
+    # Password accounts require password confirmation
+    if user_doc.get("password"):
+        password = request.form.get("password", "")
+        if not password or not bcrypt.check_password_hash(user_doc["password"], password):
+            flash("Incorrect password. Account not deleted.", "danger")
+            return redirect(url_for("profile.profile"))
+
+    user_id = current_user.id
+    logout_user()
+    db.user.delete_one({"_id": user_id})
+    flash("Your account has been permanently deleted.", "info")
+    return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/delete_account/token", methods=["GET"])
+@login_required
+def delete_account_token():
+    """Generate and return a CSRF token for the delete account form."""
+    token = secrets.token_hex(32)
+    session["delete_csrf_token"] = token
+    from flask import jsonify
+    user_doc = db.user.find_one({"_id": current_user.id}, {"password": 1}) or {}
+    return jsonify({"csrf_token": token, "is_oauth": not bool(user_doc.get("password"))})
 
 
 @auth_bp.route("/login/github")
@@ -130,6 +185,8 @@ def authorize_github():
                     "email": email,
                     "github_id": github_id,
                     "progress": {},
+                    "is_admin": False,
+                    "created_at": utc_now(),
                 }
             )
             user_doc = db.user.find_one({"_id": result.inserted_id})
@@ -168,6 +225,8 @@ def authorize_google():
                     "email": email,
                     "google_id": google_id,
                     "progress": {},
+                    "is_admin": False,
+                    "created_at": utc_now(),
                 }
             )
             user_doc = db.user.find_one({"_id": result.inserted_id})

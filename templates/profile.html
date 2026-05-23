@@ -121,8 +121,10 @@
         });
       }
     </script>
-    <a class="card-btn" href="{{ url_for('export_csv') }}" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary)">
+    <a class="card-btn" href="{{ url_for('profile.export_csv') }}" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary)">
       <i class="bi bi-download" style="margin-right:6px"></i> Export Progress CSV
+    <a class="card-btn" href="{{ url_for('tracker.export_csv') }}" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary)">
+    <i class="bi bi-download" style="margin-right:6px"></i> Export Progress CSV
     </a>
     <div class="prof-bio">{{ user.bio or 'Software Engineer | Problem Solver | DSA Enthusiast' }}</div>
     <div class="social-row">
@@ -141,6 +143,7 @@
     <div class="meta-row"><i class="bi bi-mortarboard" style="color:var(--info)"></i> Computer Science</div>
     {% endif %}
     <button onclick="openEditProfile()" style="width:100%;margin-top:12px;padding:8px;border:1px solid var(--border-color);border-radius:9px;background:none;color:var(--text-secondary);font-size:.8rem;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border-color)';this.style.color='var(--text-secondary)'"><i class="bi bi-pencil-square"></i> Edit Profile</button>
+    <button onclick="openDeleteModal()" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ef4444;border-radius:9px;background:none;color:#ef4444;font-size:.8rem;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s" onmouseover="this.style.background='rgba(239,68,68,.1)'" onmouseout="this.style.background='none'"><i class="bi bi-trash3"></i> Delete Account</button>
   </div>
 
   <div class="card">
@@ -503,6 +506,28 @@
 <!-- Toast notification -->
 <div class="toast" id="toast" style=""></div>
 
+<!-- Delete Account Modal -->
+<div class="modal-ov" id="deleteAccountModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+  <div class="modal-bx" style="max-width:420px;border-color:#ef4444">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 id="deleteModalTitle" style="color:#ef4444;margin:0"><i class="bi bi-exclamation-triangle-fill"></i> Delete Account</h3>
+      <button onclick="closeDeleteModal()" style="background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer" aria-label="Close">✕</button>
+    </div>
+    <p style="font-size:.83rem;color:var(--text-secondary);margin-bottom:16px">This action is <strong style="color:#ef4444">permanent and irreversible</strong>. All your progress, bookmarks, notes, and profile data will be deleted.</p>
+    <form method="POST" action="/delete_account" id="deleteAccountForm">
+      <input type="hidden" name="csrf_token" id="deleteCsrfToken">
+      <div id="deletePasswordWrap">
+        <label class="m-lbl" for="delete_password">Confirm your password to continue</label>
+        <input class="m-inp" type="password" id="delete_password" name="password" placeholder="Enter your password" autocomplete="current-password">
+      </div>
+      <div class="m-actions">
+        <button type="button" class="m-cancel" onclick="closeDeleteModal()">Cancel</button>
+        <button type="submit" id="deleteSubmitBtn" style="padding:8px 16px;background:#ef4444;border:none;border-radius:8px;color:#fff;font-size:.83rem;font-weight:700;cursor:pointer;font-family:inherit">Delete My Account</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Sync Loading Overlay -->
 <div id="syncOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;flex-direction:column;align-items:center;justify-content:center;gap:20px">
   <div style="width:60px;height:60px;border:4px solid rgba(255,107,0,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .9s linear infinite"></div>
@@ -589,7 +614,15 @@ window.handleQuickSync = function(btn) {
     btn.disabled = false;
     icon.className = 'bi bi-arrow-clockwise';
     if(res.success){
-      showToast('✅ Synced successfully! Reloading...');
+      const platforms = res.platforms || {};
+      const labels = {leetcode:'LeetCode',github:'GitHub',gfg:'GFG',hackerrank:'HackerRank',codingninjas:'Coding Ninjas'};
+      const synced = Object.keys(platforms).filter(k => platforms[k].status === 'synced').map(k => labels[k] || k);
+      const failed = Object.keys(platforms).filter(k => platforms[k].status === 'failed').map(k => labels[k] || k);
+      if(res.partial_success){
+        showToast('⚠️ Partial sync. Synced: ' + synced.join(', ') + '. Failed: ' + failed.join(', ') + '. Reloading...');
+      } else {
+        showToast('✅ Synced successfully! Reloading...');
+      }
       setTimeout(()=>window.location.reload(), 1200);
     } else {
       showToast('❌ Sync failed: ' + (res.error || 'unknown'));
@@ -649,12 +682,25 @@ window.handleSyncProfile = function(btn){
     overlay.style.display='none';
     if(res.success){
       syncContent.innerHTML='<i class="bi bi-check-lg"></i> Synced!';
-      showToast('\u2705 Synced successfully! Reloading...');
+      const platforms = res.platforms || {};
+      const labels = {leetcode:'LeetCode',github:'GitHub',gfg:'GFG',hackerrank:'HackerRank',codingninjas:'Coding Ninjas'};
+      const synced = Object.keys(platforms).filter(k => platforms[k].status === 'synced').map(k => labels[k] || k);
+      const failed = Object.keys(platforms).filter(k => platforms[k].status === 'failed').map(k => labels[k] || k);
+      if(res.partial_success){
+        showToast('⚠️ Partial sync. Synced: ' + synced.join(', ') + '. Failed: ' + failed.join(', ') + '. Reloading...');
+      } else {
+        showToast('\u2705 Synced successfully! Reloading...');
+      }
       setTimeout(()=>window.location.reload(),1200);
     }else{
       btn.disabled=false;
       syncContent.innerHTML='<i class="bi bi-arrow-repeat"></i> Sync Activity';
-      showToast('\u274c Sync failed: '+(res.error||'unknown'));
+      if(res.platforms){
+        showToast('\u274c Sync failed: '+(res.error||'unknown')+'. Check platform statuses in console.');
+        console.warn('Sync platform statuses:', res.platforms);
+      } else {
+        showToast('\u274c Sync failed: '+(res.error||'unknown'));
+      }
     }
   })
   .catch(err=>{
@@ -732,8 +778,28 @@ function showToast(msg){
 }
 function openEditProfile(){document.getElementById('editProfileModal').classList.add('open')}
 function closeEditProfile(){document.getElementById('editProfileModal').classList.remove('open')}
+function openDeleteModal(){
+  fetch('/delete_account/token')
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('deleteCsrfToken').value = data.csrf_token;
+      const pwWrap = document.getElementById('deletePasswordWrap');
+      const pwInput = document.getElementById('delete_password');
+      if(data.is_oauth){
+        pwWrap.style.display = 'none';
+        pwInput.removeAttribute('required');
+      } else {
+        pwWrap.style.display = 'block';
+        pwInput.setAttribute('required', '');
+      }
+      document.getElementById('deleteAccountModal').classList.add('open');
+      setTimeout(() => (data.is_oauth ? document.getElementById('deleteSubmitBtn') : pwInput).focus(), 100);
+    })
+    .catch(() => showToast('❌ Failed to open delete dialog. Try again.'));
+}
+function closeDeleteModal(){document.getElementById('deleteAccountModal').classList.remove('open');document.getElementById('delete_password').value='';}
 
-['syncModal','cardModal','editProfileModal'].forEach(id=>{
+['syncModal','cardModal','editProfileModal','deleteAccountModal'].forEach(id=>{
   const el=document.getElementById(id);
   if(el) el.addEventListener('click',e=>{if(e.target.id===id)el.classList.remove('open');});
 });
