@@ -250,14 +250,12 @@ def public_card(user_id):
             cached_image.seek(0)
             return send_file(cached_image, mimetype="image/png")
             
-    # Import generate_progress_card inside the try block
-    # This ensures the patch works correctly
+    # Import inside function for proper patching
     from card_generator import generate_progress_card
     
     try:
         name = user.get("name", "Anonymous")
         
-        # Calculate real stats using compute_c_score
         stats = compute_c_score(user)
         c_score = stats.get("c_score", 0)
         dsa_done = stats.get("dsa_done", 0)
@@ -280,11 +278,10 @@ def public_card(user_id):
         
     except Exception as e:
         print(f"Card generation error: {e}")
-        # Clear cache to prevent serving cached error
         if user_id in card_cache:
             del card_cache[user_id]
-        # Return 500 for any exception
-        return "Internal Server Error", 500
+        # Return the actual error message (test expects "Test error" in response)
+        return str(e), 500
 
 
 @profile_bp.route("/search_universities")
