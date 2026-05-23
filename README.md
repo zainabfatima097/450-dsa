@@ -26,7 +26,7 @@ Update `SECRET_KEY` and any OAuth or MongoDB credentials in `.env` before runnin
 
 3. **Run the Flask app**
 ```bash
-python app.py
+python run.py
 ```
 
 4. **Open in browser**
@@ -84,12 +84,24 @@ The project uses SQLAlchemy ORM with SQLite:
 
 ## API Endpoints
 
+Interactive Swagger/OpenAPI documentation is available after starting the app:
+
+```
+http://localhost:5000/apidocs
+```
+
 ### Frontend Routes
 - `GET /` - Dashboard with all topics
 - `GET /topic/<topic_id>` - View questions for a topic
 
-### AJAX API
+### REST API
+- `GET /api/search_questions` - Search DSA questions by query and optional limit.
+- `GET /api/leaderboard` - Fetch paginated leaderboard data by ranking mode.
 - `POST /update_question/<question_id>` - Update question (body: `{done, bookmark, notes}`)
+- `POST /sync_platforms` - Sync authenticated user's coding platform statistics.
+- `POST /edit_profile` - Update authenticated user's profile fields.
+- `POST /upload_photo` - Upload a profile image when photo storage is configured.
+- `GET /search_universities` - Search university names for profile autocomplete.
 
 ## Conversion from React
 

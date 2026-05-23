@@ -3,6 +3,7 @@ import os
 import secrets
 
 from dotenv import load_dotenv
+from flasgger import Swagger
 from flask import Flask, session
 
 from app.admin import admin_bp

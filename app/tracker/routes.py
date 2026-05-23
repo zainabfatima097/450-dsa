@@ -106,6 +106,56 @@ def export_topic_notes(topic_id):
 @tracker_bp.route("/update_question/<question_id>", methods=["POST"])
 @login_required
 def update_question(question_id):
+    """Update the authenticated user's progress for a question.
+    ---
+    tags:
+      - Tracker
+    parameters:
+      - name: question_id
+        in: path
+        type: string
+        required: true
+        description: MongoDB ObjectId of the question to update.
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            done:
+              type: boolean
+              description: Whether the question is completed.
+            bookmark:
+              type: boolean
+              description: Whether the question is bookmarked.
+            notes:
+              type: string
+              description: User notes for the question.
+    security:
+      - SessionAuth: []
+    responses:
+      200:
+        description: Question progress updated successfully.
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+      401:
+        description: Login required.
+      404:
+        description: Question not found.
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            error:
+              type: string
+              example: Question not found
+    """
     try:
         question = db.question.find_one({"_id": ObjectId(question_id)})
     except Exception:
