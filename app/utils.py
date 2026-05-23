@@ -379,7 +379,7 @@ def build_college_leaderboard_data(entries=None):
 
 def compute_user_platforms(solved_items, external_totals, all_questions):
     """Compute platform counts combining solved DSA questions with external totals."""
-    platforms = {"LeetCode": 0, "GFG": 0, "Coding Ninjas": 0, "HackerRank": 0, "Other": 0}
+    platforms = {"LeetCode": 0, "GFG": 0, "Coding Ninjas": 0, "HackerRank": 0, "AtCoder": 0, "Other": 0}
     
     for question in all_questions:
         question_id = str(question.get("_id", ""))
@@ -401,5 +401,6 @@ def compute_user_platforms(solved_items, external_totals, all_questions):
     platforms["GFG"] = max(platforms["GFG"], ext_totals.get("GFG", 0))
     platforms["Coding Ninjas"] = max(platforms["Coding Ninjas"], ext_totals.get("Coding Ninjas", 0))
     platforms["HackerRank"] = max(platforms["HackerRank"], ext_totals.get("HackerRank", 0))
-    
+    platforms["AtCoder"] = ext_totals.get("AtCoder", 0)
+
     return platforms
