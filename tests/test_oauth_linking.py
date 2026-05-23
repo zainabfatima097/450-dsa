@@ -105,20 +105,22 @@ def make_app(monkeypatch, db_override):
     import app.auth.routes as auth_routes
     import app.extensions as ext
 
-    monkeypatch.setattr(ext, "db", db_override)
+    # Patch the LocalProxy target so create_app() sees our fake db
+    monkeypatch.setattr(app_module, "db", db_override)
     monkeypatch.setattr(auth_routes, "db", db_override)
+    monkeypatch.setattr(ext, "db", db_override)
 
+    # Patch init_app calls to no-ops
     monkeypatch.setattr(ext.mongo, "init_app", lambda a: None)
     monkeypatch.setattr(ext.bcrypt, "init_app", lambda a: None)
     monkeypatch.setattr(ext.login_manager, "init_app", lambda a: None)
     monkeypatch.setattr(ext.oauth, "init_app", lambda a: None)
     monkeypatch.setattr(ext.limiter, "init_app", lambda a: None)
     monkeypatch.setattr(ext.cache, "init_app", lambda a: None)
-    monkeypatch.setattr(
-        ext.oauth,
-        "register",
-        lambda name, **kwargs: None,
-    )
+    monkeypatch.setattr(ext.oauth, "register", lambda name, **kwargs: None)
+
+    # Patch mongo.db property so LocalProxy resolves to our fake db
+    monkeypatch.setattr(ext.mongo, "db", db_override, raising=False)
 
     flask_app = app_module.create_app()
     flask_app.config["TESTING"] = True
@@ -154,7 +156,6 @@ def _make_google_mock(user_info=GOOGLE_USER_INFO):
 # ── GitHub Tests ──────────────────────────────────────────────────────────────
 
 def test_github_links_existing_email_user(monkeypatch):
-    """GitHub OAuth links github_id to existing user with matching email."""
     existing = {"_id": EXISTING_USER_ID, "email": "test@example.com", "progress": {}}
     db = make_fake_db(existing=existing)
     flask_app = make_app(monkeypatch, db)
@@ -167,7 +168,6 @@ def test_github_links_existing_email_user(monkeypatch):
 
 
 def test_github_creates_new_user_when_no_match(monkeypatch):
-    """GitHub OAuth creates a new user when no existing email or github_id match."""
     inserted = {}
     db = make_fake_db(inserted=inserted)
     flask_app = make_app(monkeypatch, db)
@@ -180,7 +180,6 @@ def test_github_creates_new_user_when_no_match(monkeypatch):
 
 
 def test_github_missing_token_returns_400(monkeypatch):
-    """GitHub OAuth returns 400 when token is missing."""
     db = make_fake_db()
     flask_app = make_app(monkeypatch, db)
 
@@ -191,7 +190,6 @@ def test_github_missing_token_returns_400(monkeypatch):
 
 
 def test_github_failed_user_fetch_returns_400(monkeypatch):
-    """GitHub OAuth returns 400 when user info fetch fails."""
     db = make_fake_db()
     flask_app = make_app(monkeypatch, db)
 
@@ -204,7 +202,6 @@ def test_github_failed_user_fetch_returns_400(monkeypatch):
 # ── Google Tests ──────────────────────────────────────────────────────────────
 
 def test_google_links_existing_email_user(monkeypatch):
-    """Google OAuth links google_id to existing user with matching email."""
     existing = {"_id": EXISTING_USER_ID, "email": "test@example.com", "progress": {}}
     db = make_fake_db(existing=existing)
     flask_app = make_app(monkeypatch, db)
@@ -217,7 +214,6 @@ def test_google_links_existing_email_user(monkeypatch):
 
 
 def test_google_creates_new_user_when_no_match(monkeypatch):
-    """Google OAuth creates a new user when no existing email or google_id match."""
     inserted = {}
     db = make_fake_db(inserted=inserted)
     flask_app = make_app(monkeypatch, db)
@@ -230,7 +226,6 @@ def test_google_creates_new_user_when_no_match(monkeypatch):
 
 
 def test_google_missing_userinfo_returns_400(monkeypatch):
-    """Google OAuth returns 400 when userinfo is missing."""
     db = make_fake_db()
     flask_app = make_app(monkeypatch, db)
 
