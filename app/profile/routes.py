@@ -35,26 +35,42 @@ def build_sync_platforms_response(platform_status):
     """
     response = {"platforms": dict(platform_status)}
     
+    # Check if any platform was actually attempted (not skipped)
     attempted = any(
         status.get("status") in ["synced", "failed"] 
         for status in platform_status.values()
     )
     
+    # If no platforms were attempted, return False
+    if not attempted:
+        response["success"] = False
+        response["error"] = "No platforms attempted to sync"
+        return response
+    
+    # Check if ALL attempted platforms FAILED
+    all_failed = all(
+        status.get("status") == "failed" 
+        for status in platform_status.values()
+        if status.get("status") in ["synced", "failed"]
+    )
+    
+    # If all attempted failed, return False
+    if all_failed:
+        response["success"] = False
+        return response
+    
+    # Check if all attempted platforms succeeded
     all_success = all(
         status.get("status") != "failed" 
         for status in platform_status.values()
         if status.get("status") in ["synced", "failed"]
     )
     
-    if not attempted:
-        response["success"] = False
-        response["error"] = "No platforms attempted to sync"
-        return response
-    
     if all_success:
         response["success"] = True
         return response
     
+    # Partial success (some succeeded, some failed)
     response["success"] = True
     response["partial_success"] = True
     return response
@@ -136,6 +152,9 @@ def sync_platforms():
             platform_status["leetcode"] = {"status": "synced"}
         except Exception as e:
             platform_status["leetcode"] = {"status": "failed", "error": str(e)}
+            # Don't add to totals if failed
+    else:
+        platform_status["leetcode"] = {"status": "skipped"}
 
     if gh_user:
         try:
@@ -150,6 +169,8 @@ def sync_platforms():
             platform_status["github"] = {"status": "synced"}
         except Exception as e:
             platform_status["github"] = {"status": "failed", "error": str(e)}
+    else:
+        platform_status["github"] = {"status": "skipped"}
 
     if gfg_user:
         try:
@@ -159,6 +180,8 @@ def sync_platforms():
             platform_status["gfg"] = {"status": "synced"}
         except Exception as e:
             platform_status["gfg"] = {"status": "failed", "error": str(e)}
+    else:
+        platform_status["gfg"] = {"status": "skipped"}
 
     if cn_user:
         try:
@@ -168,6 +191,8 @@ def sync_platforms():
             platform_status["codingninjas"] = {"status": "synced"}
         except Exception as e:
             platform_status["codingninjas"] = {"status": "failed", "error": str(e)}
+    else:
+        platform_status["codingninjas"] = {"status": "skipped"}
 
     if hr_user:
         try:
@@ -178,6 +203,8 @@ def sync_platforms():
             platform_status["hackerrank"] = {"status": "synced"}
         except Exception as e:
             platform_status["hackerrank"] = {"status": "failed", "error": str(e)}
+    else:
+        platform_status["hackerrank"] = {"status": "skipped"}
 
     update_fields["external_daily_counts"] = combined
     update_fields["external_totals"] = totals
