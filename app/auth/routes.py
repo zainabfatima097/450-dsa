@@ -208,6 +208,9 @@ def authorize_google():
     if not user_info:
         user_info = google.userinfo()
 
+    if not user_info:
+        return "Failed to fetch Google user info", 400
+
     google_id = user_info["sub"]
     email = user_info.get("email")
 
