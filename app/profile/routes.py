@@ -270,14 +270,21 @@ def public_card(user_id):
         solved_items = {qid: p for qid, p in progress_data.items() if p.get("done")}
         platforms = compute_user_platforms(solved_items, user.get("external_totals", {}), all_questions)
 
+        # Call generate_progress_card - this is where the test patches the exception
         img_io = generate_progress_card(name, c_score, dsa_progress, current_streak, platforms)
-        img_io.seek(0)
         
+        # If we get here, no exception occurred
+        img_io.seek(0)
         card_cache[user_id] = (current_time, img_io)
         return send_file(img_io, mimetype="image/png")
+        
     except Exception as e:
+        # This except block should catch the patched exception
         print(f"Card generation error: {e}")
-        # Return 500 to satisfy the test
+        # Clear cache for this user to prevent cached error
+        if user_id in card_cache:
+            del card_cache[user_id]
+        # Return 500 for any exception during card generation
         return "Internal Server Error", 500
 
 
