@@ -28,6 +28,34 @@ from profile_validation import build_profile_updates
 profile_bp = Blueprint("profile", __name__)
 
 
+def build_sync_platforms_response(success, message=None, platforms=None, error=None):
+    """
+    Build standardized response for platform sync operations.
+    
+    Args:
+        success (bool): Whether the sync was successful
+        message (str, optional): Success or info message
+        platforms (dict, optional): Dictionary with platform sync statuses
+        error (str, optional): Error message if success is False
+    
+    Returns:
+        dict: Standardized response dictionary
+    """
+    response = {"success": success}
+    
+    if message:
+        response["message"] = message
+    if error:
+        response["error"] = error
+    if platforms:
+        response["platforms"] = platforms
+        # Check if any platform sync failed
+        if any(p.get("status") == "failed" for p in platforms.values()):
+            response["partial_success"] = True
+    
+    return response
+
+
 @profile_bp.route("/sync_platforms", methods=["POST"])
 @login_required
 @limiter.limit("5 per minute")
@@ -44,7 +72,7 @@ def sync_platforms():
             remaining = int(600 - diff)
             mins = remaining // 60
             secs = remaining % 60
-            return jsonify({"success": False, "error": f"Please wait {mins}m {secs}s before syncing again.", "message": f"Rate limit: wait {mins}m {secs}s"})
+            return jsonify(build_sync_platforms_response(False, error=f"Please wait {mins}m {secs}s before syncing again.", message=f"Rate limit: wait {mins}m {secs}s"))
 
     update_fields = {"last_sync": now}
 
@@ -136,7 +164,7 @@ def sync_platforms():
     current_user.reload()
     
     message = "Sync completed! " + " | ".join(sync_results) if sync_results else "Sync completed successfully"
-    return jsonify({"success": True, "message": message})
+    return jsonify(build_sync_platforms_response(True, message=message))
 
 
 @profile_bp.route("/edit_profile", methods=["POST"])
