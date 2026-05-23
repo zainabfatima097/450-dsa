@@ -156,13 +156,11 @@ def login_github():
 def authorize_github():
     token = github.authorize_access_token()
     if not token:
-        flash("GitHub authorization failed", "danger")
-        return redirect(url_for("auth.login"))
+        return "GitHub authorization failed", 400
 
     response = github.get("user")
     if not response.ok:
-        flash("Failed to fetch GitHub user", "danger")
-        return redirect(url_for("auth.login"))
+        return "Failed to fetch GitHub user", 400
 
     user_info = response.json()
     github_id = str(user_info["id"])

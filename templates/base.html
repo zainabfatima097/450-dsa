@@ -741,6 +741,61 @@
         const themeIcon = document.getElementById('theme-icon');
         const root = document.documentElement;
 
+        const toastConfig = {
+            success: { title: 'Success', icon: 'bi-check-circle-fill' },
+            error: { title: 'Error', icon: 'bi-x-circle-fill' },
+            danger: { title: 'Error', icon: 'bi-x-circle-fill' },
+            warning: { title: 'Warning', icon: 'bi-exclamation-triangle-fill' },
+            info: { title: 'Info', icon: 'bi-info-circle-fill' },
+        };
+
+        window.showToast = function(message, type = 'info', timeout = 4000) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const normalizedType = type === 'danger' ? 'error' : type;
+            const variant = toastConfig[normalizedType] || toastConfig.info;
+            const toast = document.createElement('div');
+            toast.className = `toast-notification ${normalizedType}`;
+            toast.setAttribute('role', 'alert');
+
+            const icon = document.createElement('i');
+            icon.className = `bi ${variant.icon} toast-icon`;
+
+            const content = document.createElement('div');
+            content.className = 'toast-content';
+
+            const title = document.createElement('div');
+            title.className = 'toast-title';
+            title.textContent = variant.title;
+
+            const body = document.createElement('div');
+            body.className = 'toast-message';
+            body.textContent = message;
+
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'toast-close';
+            close.setAttribute('aria-label', 'Dismiss notification');
+            close.innerHTML = '<i class="bi bi-x-lg"></i>';
+
+            content.append(title, body);
+            toast.append(icon, content, close);
+            container.appendChild(toast);
+
+            const removeToast = () => {
+                toast.style.animation = 'toastSlideOut 0.25s ease forwards';
+                setTimeout(() => toast.remove(), 250);
+            };
+
+            close.addEventListener('click', (event) => {
+                event.stopPropagation();
+                removeToast();
+            });
+            toast.addEventListener('click', removeToast);
+            setTimeout(removeToast, timeout);
+        };
+
         function applyTheme(theme) {
             if (theme === 'light') {
                 root.style.setProperty('--bg-primary', '#f0f2f5');
