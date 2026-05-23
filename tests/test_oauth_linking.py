@@ -105,20 +105,17 @@ def make_app(monkeypatch, db_override):
     import app.auth.routes as auth_routes
     import app.extensions as ext
 
-    # Patch db everywhere BEFORE create_app runs
     monkeypatch.setattr(app_module, "db", db_override)
     monkeypatch.setattr(auth_routes, "db", db_override)
     monkeypatch.setattr(ext, "db", db_override)
     monkeypatch.setattr(ext.mongo, "db", db_override, raising=False)
 
-    # Mock only things that need real connections - NOT login_manager
     monkeypatch.setattr(ext.mongo, "init_app", lambda a: None)
     monkeypatch.setattr(ext.oauth, "init_app", lambda a: None)
     monkeypatch.setattr(ext.limiter, "init_app", lambda a: None)
     monkeypatch.setattr(ext.cache, "init_app", lambda a: None)
     monkeypatch.setattr(ext.oauth, "register", lambda name, **kwargs: None)
 
-    # Let bcrypt and login_manager init for real - they don't need network/DB
     flask_app = app_module.create_app()
     flask_app.config["TESTING"] = True
     flask_app.config["WTF_CSRF_ENABLED"] = False
@@ -205,6 +202,8 @@ def test_google_links_existing_email_user(monkeypatch):
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.google", new=_make_google_mock()):
+            with client.session_transaction() as sess:
+                sess["GOOGLE_OAUTH_NONCE_SESSION_KEY"] = "test-nonce"
             resp = client.get("/login/google/authorize")
             assert resp.status_code == 302
             assert "google_id" in existing
@@ -217,6 +216,8 @@ def test_google_creates_new_user_when_no_match(monkeypatch):
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.google", new=_make_google_mock()):
+            with client.session_transaction() as sess:
+                sess["GOOGLE_OAUTH_NONCE_SESSION_KEY"] = "test-nonce"
             resp = client.get("/login/google/authorize")
             assert resp.status_code == 302
             assert inserted.get("google_id") == "google-999"
@@ -232,6 +233,8 @@ def test_google_missing_userinfo_returns_400(monkeypatch):
     mock.userinfo = MagicMock(return_value=None)
 
     with flask_app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess["GOOGLE_OAUTH_NONCE_SESSION_KEY"] = "test-nonce"
         with patch("app.auth.routes.google", new=mock):
             resp = client.get("/login/google/authorize")
             assert resp.status_code == 400
