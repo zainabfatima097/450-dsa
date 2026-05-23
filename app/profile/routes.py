@@ -50,7 +50,7 @@ def build_sync_platforms_response(platform_status: dict):
 @login_required
 @limiter.limit("5 per minute")
 def sync_platforms():
-    data = request.get_json(silent=true) or {}
+    data = request.get_json(silent=True) or {}
     if not isinstance(data, dict):
         return jsonify({"success": False, "error": "Invalid data format, must be a JSON object"}), 400
     now = utc_now()
@@ -226,68 +226,7 @@ def sync_platforms():
 @profile_bp.route("/edit_profile", methods=["POST"])
 @login_required
 def edit_profile():
-    """Update profile fields for the authenticated user.
-    ---
-    tags:
-      - Profile
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            name:
-              type: string
-              maxLength: 100
-            bio:
-              type: string
-              maxLength: 500
-            location:
-              type: string
-              maxLength: 100
-            college:
-              type: string
-              maxLength: 200
-            headline:
-              type: string
-              maxLength: 150
-            linkedin_url:
-              type: string
-              maxLength: 300
-            twitter_url:
-              type: string
-              maxLength: 300
-            website_url:
-              type: string
-              maxLength: 300
-            resume_url:
-              type: string
-              maxLength: 300
-    security:
-      - SessionAuth: []
-    responses:
-      200:
-        description: Profile updated successfully.
-        schema:
-          type: object
-          properties:
-            success:
-              type: boolean
-              example: true
-      400:
-        description: Invalid profile payload.
-        schema:
-          type: object
-          properties:
-            success:
-              type: boolean
-              example: false
-            error:
-              type: string
-      401:
-        description: Login required.
-    """
+    """Update profile fields for the authenticated user."""
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "error": "No data"}), 400
@@ -350,32 +289,6 @@ def public_card(user_id):
 
 @profile_bp.route("/search_universities")
 def search_universities():
-    """Search universities by name.
-    ---
-    tags:
-      - Profile
-    parameters:
-      - name: q
-        in: query
-        type: string
-        required: true
-        minLength: 2
-        description: University name search text.
-    responses:
-      200:
-        description: Matching universities.
-        schema:
-          type: array
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-              country:
-                type: string
-              label:
-                type: string
-    """
     query = request.args.get("q", "").strip()
     if len(query) < 2:
         return jsonify([])
@@ -406,46 +319,6 @@ def search_universities():
 @login_required
 @limiter.limit("10 per minute")
 def upload_photo():
-    """Upload a profile photo.
-    ---
-    tags:
-      - Profile
-    consumes:
-      - multipart/form-data
-    parameters:
-      - name: photo
-        in: formData
-        type: file
-        required: true
-        description: Profile image file.
-    security:
-      - SessionAuth: []
-    responses:
-      200:
-        description: Photo uploaded successfully when an uploader is configured.
-        schema:
-          type: object
-          properties:
-            success:
-              type: boolean
-            photo_url:
-              type: string
-      401:
-        description: Login required.
-      429:
-        description: Rate limit exceeded.
-      500:
-        description: Photo upload is currently disabled or upload failed.
-        schema:
-          type: object
-          properties:
-            success:
-              type: boolean
-              example: false
-            error:
-              type: string
-              example: Photo upload disabled (Cloudinary not configured)
-    """
     return jsonify({"success": False, "error": "Photo upload disabled (Cloudinary not configured)"}), 500
 
 
@@ -580,4 +453,3 @@ def profile():
         lc_badges=lc_badges,
         hr_badges=hr_badges,
     )
-    
