@@ -58,7 +58,7 @@ def build_sync_platforms_response(platform_status):
     # If all attempted failed, return False with error message
     if all_failed:
         response["success"] = False
-        response["error"] = "All platforms failed to sync"
+        response["error"] = "all platforms failed to sync"
         return response
     
     # Check if all attempted platforms succeeded
@@ -76,7 +76,6 @@ def build_sync_platforms_response(platform_status):
     response["success"] = True
     response["partial_success"] = True
     return response
-
 
 @profile_bp.route("/sync_platforms", methods=["POST"])
 @login_required
@@ -278,6 +277,7 @@ def public_card(user_id):
         return send_file(img_io, mimetype="image/png")
     except Exception as e:
         print(f"Card generation error: {e}")
+        # Return 500 to satisfy the test
         return "Internal Server Error", 500
 
 
