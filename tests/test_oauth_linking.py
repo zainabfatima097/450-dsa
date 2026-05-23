@@ -54,33 +54,43 @@ def make_fake_db(existing=None, inserted=None):
         def update_many(f, u):
             pass
 
+        @staticmethod
+        def create_index(*a, **kw):
+            pass
+
     class FakeTopicCollection:
         @staticmethod
-        def create_index(*a, **kw): pass
+        def create_index(*a, **kw):
+            pass
 
         @staticmethod
-        def count_documents(*a, **kw): return 1
+        def count_documents(*a, **kw):
+            return 1
 
         @staticmethod
         def insert_one(*a, **kw):
             return SimpleNamespace(inserted_id="topic-1")
 
         @staticmethod
-        def insert_many(*a, **kw): pass
+        def insert_many(*a, **kw):
+            pass
 
     class FakeQuestionCollection:
         @staticmethod
-        def create_index(*a, **kw): pass
+        def create_index(*a, **kw):
+            pass
 
         @staticmethod
-        def count_documents(*a, **kw): return 0
+        def count_documents(*a, **kw):
+            return 0
 
         @staticmethod
         def insert_one(*a, **kw):
             return SimpleNamespace(inserted_id="q-1")
 
         @staticmethod
-        def insert_many(*a, **kw): pass
+        def insert_many(*a, **kw):
+            pass
 
     class FakeDB:
         user = FakeUserCollection()
@@ -93,18 +103,23 @@ def make_fake_db(existing=None, inserted=None):
 def make_app(monkeypatch, db_override):
     import app as app_module
     import app.auth.routes as auth_routes
+    import app.extensions as ext
 
-    monkeypatch.setattr(app_module, "db", db_override)
+    monkeypatch.setattr(ext, "db", db_override)
     monkeypatch.setattr(auth_routes, "db", db_override)
-    monkeypatch.setattr(app_module.mongo, "init_app", lambda a: None)
-    monkeypatch.setattr(app_module.bcrypt, "init_app", lambda a: None)
-    monkeypatch.setattr(app_module.login_manager, "init_app", lambda a: None)
-    monkeypatch.setattr(app_module.oauth, "init_app", lambda a: None)
+
+    monkeypatch.setattr(ext.mongo, "init_app", lambda a: None)
+    monkeypatch.setattr(ext.bcrypt, "init_app", lambda a: None)
+    monkeypatch.setattr(ext.login_manager, "init_app", lambda a: None)
+    monkeypatch.setattr(ext.oauth, "init_app", lambda a: None)
+    monkeypatch.setattr(ext.limiter, "init_app", lambda a: None)
+    monkeypatch.setattr(ext.cache, "init_app", lambda a: None)
     monkeypatch.setattr(
-        app_module.oauth,
+        ext.oauth,
         "register",
         lambda name, **kwargs: None,
     )
+
     flask_app = app_module.create_app()
     flask_app.config["TESTING"] = True
     flask_app.config["WTF_CSRF_ENABLED"] = False
@@ -113,19 +128,15 @@ def make_app(monkeypatch, db_override):
 
 def _make_github_mock(token=True, user_ok=True):
     mock = MagicMock()
-
     mock.authorize_access_token = MagicMock(
         return_value={"access_token": "tok"} if token else None
     )
-
     user_resp = MagicMock()
     user_resp.ok = user_ok
     user_resp.json = MagicMock(return_value=GITHUB_USER_INFO)
-
     email_resp = MagicMock()
     email_resp.status_code = 200
     email_resp.json = MagicMock(return_value=GITHUB_EMAILS)
-
     mock.get = MagicMock(
         side_effect=lambda url: user_resp if url == "user" else email_resp
     )
@@ -231,4 +242,4 @@ def test_google_missing_userinfo_returns_400(monkeypatch):
     with flask_app.test_client() as client:
         with patch("app.auth.routes.google", new=mock):
             resp = client.get("/login/google/authorize")
-            assert resp.status_code in (302, 400)
+            assert resp.status_code == 400
