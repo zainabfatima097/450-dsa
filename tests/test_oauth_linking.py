@@ -24,6 +24,7 @@ GOOGLE_USER_INFO = {
 
 
 def make_fake_db(existing=None, inserted=None):
+
     class FakeUserCollection:
         @staticmethod
         def find_one(q):
@@ -53,15 +54,44 @@ def make_fake_db(existing=None, inserted=None):
         def update_many(f, u):
             pass
 
+    class FakeTopicCollection:
+        @staticmethod
+        def create_index(*a, **kw):
+            pass
+
+        @staticmethod
+        def count_documents(*a, **kw):
+            return 1
+
+        @staticmethod
+        def insert_one(*a, **kw):
+            return SimpleNamespace(inserted_id="topic-1")
+
+        @staticmethod
+        def insert_many(*a, **kw):
+            pass
+
+    class FakeQuestionCollection:
+        @staticmethod
+        def create_index(*a, **kw):
+            pass
+
+        @staticmethod
+        def count_documents(*a, **kw):
+            return 0
+
+        @staticmethod
+        def insert_one(*a, **kw):
+            return SimpleNamespace(inserted_id="q-1")
+
+        @staticmethod
+        def insert_many(*a, **kw):
+            pass
+
     class FakeDB:
         user = FakeUserCollection()
-
-        class topic:
-            def create_index(self, *a, **kw): pass
-            def count_documents(self, *a, **kw): return 0
-
-        class question:
-            def create_index(self, *a, **kw): pass
+        topic = FakeTopicCollection()
+        question = FakeQuestionCollection()
 
     return FakeDB()
 
