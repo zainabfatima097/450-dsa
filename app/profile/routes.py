@@ -32,40 +32,29 @@ profile_bp = Blueprint("profile", __name__)
 def build_sync_platforms_response(platform_status):
     """
     Build standardized response for platform sync operations.
-    
-    Args:
-        platform_status (dict): Dictionary with platform sync statuses
-    
-    Returns:
-        dict: Standardized response dictionary with success key
     """
-    # Check if any platform was actually attempted (not skipped)
+    response = {"platforms": dict(platform_status)}
+    
     attempted = any(
         status.get("status") in ["synced", "failed"] 
         for status in platform_status.values()
     )
     
-    # Check if all attempted platforms succeeded
     all_success = all(
         status.get("status") != "failed" 
         for status in platform_status.values()
         if status.get("status") in ["synced", "failed"]
     )
     
-    # Create response with platform_status as base
-    response = dict(platform_status)
-    
-    # If no platforms were attempted, return False
     if not attempted:
         response["success"] = False
+        response["error"] = "No platforms attempted to sync"
         return response
     
-    # If all attempted succeeded, return True
     if all_success:
         response["success"] = True
         return response
     
-    # Partial success
     response["success"] = True
     response["partial_success"] = True
     return response
@@ -87,7 +76,11 @@ def sync_platforms():
             remaining = int(600 - diff)
             mins = remaining // 60
             secs = remaining % 60
-            return jsonify({"success": False, "error": f"Please wait {mins}m {secs}s before syncing again.", "message": f"Rate limit: wait {mins}m {secs}s"})
+            return jsonify({
+                "success": False,
+                "error": f"Please wait {mins}m {secs}s before syncing again.",
+                "message": f"Rate limit: wait {mins}m {secs}s"
+            })
 
     update_fields = {"last_sync": now}
 
@@ -115,53 +108,66 @@ def sync_platforms():
 
     combined = {}
     totals = {}
-    sync_results = []
+    platform_status = {}
     
     if lc_user:
-        lc = fetch_leetcode(lc_user)
-        for key, value in lc.get("calendar", {}).items():
-            combined[key] = combined.get(key, 0) + value
-        if lc.get("total"):
-            totals["LeetCode"] = lc.get("total")
-            sync_results.append(f"LeetCode: {lc.get('total')} solved")
-        if lc.get("difficulty"):
-            totals["LeetCode_Easy"] = lc["difficulty"].get("Easy", 0)
-            totals["LeetCode_Medium"] = lc["difficulty"].get("Medium", 0)
-            totals["LeetCode_Hard"] = lc["difficulty"].get("Hard", 0)
-        if lc.get("contest"):
-            totals["LeetCode_Contests"] = lc["contest"].get("attendedContestsCount", 0)
-            totals["LeetCode_Rating"] = int(lc["contest"].get("rating", 0))
-            totals["LeetCode_GlobalRank"] = lc["contest"].get("globalRanking", 0)
+        try:
+            lc = fetch_leetcode(lc_user)
+            if lc.get("calendar"):
+                for key, value in lc.get("calendar", {}).items():
+                    combined[key] = combined.get(key, 0) + value
+            if lc.get("total"):
+                totals["LeetCode"] = lc.get("total")
+            if lc.get("difficulty"):
+                totals["LeetCode_Easy"] = lc["difficulty"].get("Easy", 0)
+                totals["LeetCode_Medium"] = lc["difficulty"].get("Medium", 0)
+                totals["LeetCode_Hard"] = lc["difficulty"].get("Hard", 0)
+            if lc.get("contest"):
+                totals["LeetCode_Contests"] = lc["contest"].get("attendedContestsCount", 0)
+                totals["LeetCode_Rating"] = int(lc["contest"].get("rating", 0))
+                totals["LeetCode_GlobalRank"] = lc["contest"].get("globalRanking", 0)
 
-        rating_history = fetch_leetcode_rating_history(lc_user)
-        if rating_history:
-            update_fields["rating_history"] = rating_history
+            rating_history = fetch_leetcode_rating_history(lc_user)
+            if rating_history:
+                update_fields["rating_history"] = rating_history
 
-        lc_badges = fetch_lc_badges(lc_user)
-        update_fields["lc_badges_json"] = json.dumps(lc_badges)
+            lc_badges = fetch_lc_badges(lc_user)
+            update_fields["lc_badges_json"] = json.dumps(lc_badges)
+            platform_status["leetcode"] = {"status": "synced"}
+        except Exception as e:
+            platform_status["leetcode"] = {"status": "failed", "error": str(e)}
 
     if gh_user:
-        gh = fetch_github(gh_user)
-        for key, value in gh.get("calendar", {}).items():
-            combined[key] = combined.get(key, 0) + value
-        if gh.get("stats"):
-            totals["GitHub_Issues"] = gh["stats"]["issues"]
-            totals["GitHub_PRs"] = gh["stats"]["prs"]
-            totals["GitHub_Merged_PRs"] = gh["stats"]["merged_prs"]
-            totals["GitHub_Commits"] = gh["stats"]["commits"]
-            sync_results.append(f"GitHub: {gh['stats']['commits']} commits")
+        try:
+            gh = fetch_github(gh_user)
+            for key, value in gh.get("calendar", {}).items():
+                combined[key] = combined.get(key, 0) + value
+            if gh.get("stats"):
+                totals["GitHub_Issues"] = gh["stats"]["issues"]
+                totals["GitHub_PRs"] = gh["stats"]["prs"]
+                totals["GitHub_Merged_PRs"] = gh["stats"]["merged_prs"]
+                totals["GitHub_Commits"] = gh["stats"]["commits"]
+            platform_status["github"] = {"status": "synced"}
+        except Exception as e:
+            platform_status["github"] = {"status": "failed", "error": str(e)}
 
     if gfg_user:
-        gfg = fetch_gfg(gfg_user)
-        if gfg.get("total"):
-            totals["GFG"] = int(gfg.get("total", 0))
-            sync_results.append(f"GFG: {gfg.get('total')} solved")
+        try:
+            gfg = fetch_gfg(gfg_user)
+            if gfg.get("total"):
+                totals["GFG"] = int(gfg.get("total", 0))
+            platform_status["gfg"] = {"status": "synced"}
+        except Exception as e:
+            platform_status["gfg"] = {"status": "failed", "error": str(e)}
 
     if cn_user:
-        cn = fetch_coding_ninjas(cn_user)
-        if cn.get("total"):
-            totals["Coding Ninjas"] = int(cn.get("total", 0))
-            sync_results.append(f"Coding Ninjas: {cn.get('total')} solved")
+        try:
+            cn = fetch_coding_ninjas(cn_user)
+            if cn.get("total"):
+                totals["Coding Ninjas"] = int(cn.get("total", 0))
+            platform_status["codingninjas"] = {"status": "synced"}
+        except Exception as e:
+            platform_status["codingninjas"] = {"status": "failed", "error": str(e)}
 
     if hr_user:
         try:
@@ -169,17 +175,16 @@ def sync_platforms():
             update_fields["hr_badges_json"] = json.dumps(hr_badges)
             if hr_solved > 0:
                 totals["HackerRank"] = hr_solved
-                sync_results.append(f"HackerRank: {hr_solved} solved")
-        except Exception:
-            print("Unable to fetch HackerRank badges")
+            platform_status["hackerrank"] = {"status": "synced"}
+        except Exception as e:
+            platform_status["hackerrank"] = {"status": "failed", "error": str(e)}
 
     update_fields["external_daily_counts"] = combined
     update_fields["external_totals"] = totals
     db.user.update_one({"_id": user_id}, {"$set": update_fields})
     current_user.reload()
     
-    message = "Sync completed! " + " | ".join(sync_results) if sync_results else "Sync completed successfully"
-    return jsonify({"success": True, "message": message})
+    return jsonify(build_sync_platforms_response(platform_status))
 
 
 @profile_bp.route("/edit_profile", methods=["POST"])
@@ -221,21 +226,30 @@ def public_card(user_id):
             return send_file(cached_image, mimetype="image/png")
             
     try:
-        from io import BytesIO
         name = user.get("name", "Anonymous")
-        c_score = user.get("c_score", 0)
-        dsa_progress = user.get("dsa_progress", 0)
-        current_streak = user.get("current_streak", 0)
-        platforms = user.get("platforms", {})
         
-        img = generate_progress_card(name, c_score, dsa_progress, current_streak, platforms)
-        img_io = BytesIO()
-        img.save(img_io, 'PNG')
+        # Calculate real stats using compute_c_score
+        stats = compute_c_score(user)
+        c_score = stats.get("c_score", 0)
+        dsa_done = stats.get("dsa_done", 0)
+        
+        total_questions = db.question.count_documents({})
+        dsa_progress = round((dsa_done / total_questions * 100) if total_questions > 0 else 0, 1)
+        
+        progress_data = user.get("progress", {})
+        current_streak, _ = compute_streak(progress_data)
+        
+        all_questions = list(db.question.find())
+        solved_items = {qid: p for qid, p in progress_data.items() if p.get("done")}
+        platforms = compute_user_platforms(solved_items, user.get("external_totals", {}), all_questions)
+
+        img_io = generate_progress_card(name, c_score, dsa_progress, current_streak, platforms)
         img_io.seek(0)
         
         card_cache[user_id] = (current_time, img_io)
         return send_file(img_io, mimetype="image/png")
     except Exception as e:
+        print(f"Card generation error: {e}")
         return str(e), 500
 
 
@@ -271,7 +285,11 @@ def search_universities():
 @login_required
 @limiter.limit("10 per minute")
 def upload_photo():
-    return jsonify({"success": False, "error": "Photo upload disabled (Cloudinary not configured)", "message": "Photo upload not available"})
+    return jsonify({
+        "success": False,
+        "error": "Photo upload disabled (Cloudinary not configured)",
+        "message": "Photo upload not available"
+    })
 
 
 @profile_bp.route("/profile")
@@ -281,7 +299,11 @@ def profile():
     user = current_user
 
     all_questions = list(db.question.find())
-    solved_items = {question_id: progress for question_id, progress in user.progress.items() if progress.get("done")}
+    solved_items = {
+        question_id: progress
+        for question_id, progress in user.progress.items()
+        if progress.get("done")
+    }
 
     difficulty_map = {str(q["_id"]): q.get("difficulty", "Medium") for q in all_questions}
     
@@ -298,7 +320,6 @@ def profile():
         elif diff == "Hard":
             dsa_hard += 1
 
-    platforms = {"LeetCode": 0, "GFG": 0, "Coding Ninjas": 0, "HackerRank": 0, "Other": 0}
     daily_counts = {}
 
     topic_question_count = {}
@@ -349,19 +370,23 @@ def profile():
     for topic_doc in topics:
         topic_id = str(topic_doc["_id"])
         topic_question_ids = topic_question_count.get(topic_id, [])
-        topic_done = sum(1 for question_id in topic_question_ids if question_id in solved_items)
-        percent = (topic_done / len(topic_question_ids) * 100) if topic_question_ids else 0
-        topic_progress.append(
-            {
-                "name": topic_doc["name"],
-                "done": topic_done,
-                "total": len(topic_question_ids),
-                "percent": round(percent, 1),
-            }
+        topic_done = sum(
+            1 for question_id in topic_question_ids
+            if question_id in solved_items
         )
+        percent = (topic_done / len(topic_question_ids) * 100) if topic_question_ids else 0
+        topic_progress.append({
+            "name": topic_doc["name"],
+            "done": topic_done,
+            "total": len(topic_question_ids),
+            "percent": round(percent, 1),
+        })
 
     topic_progress.sort(key=lambda item: item["done"], reverse=True)
-    overall_percent = round((dsa_done / total_questions * 100) if total_questions > 0 else 0, 1)
+    overall_percent = round(
+        (dsa_done / total_questions * 100) if total_questions > 0 else 0,
+        1
+    )
     rating_history = list(user.rating_history or [])
 
     lc_badges = []
@@ -372,7 +397,10 @@ def profile():
         print("Unable to handle leetcode badges")
 
     try:
-        hr_badges = [badge for badge in json.loads(user.hr_badges_json or "[]") if int(badge.get("stars", 0)) > 0]
+        hr_badges = [
+            badge for badge in json.loads(user.hr_badges_json or "[]")
+            if int(badge.get("stars", 0)) > 0
+        ]
     except (json.JSONDecodeError, ValueError):
         print("Unable to handle hackerrank badges")
 
