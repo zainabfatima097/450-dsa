@@ -8,7 +8,7 @@ import time
 # import cloudinary.uploader
 # import cloudinary.api
 import requests
-from flask import Blueprint, jsonify, render_template, request, send_file
+from flask import Blueprint, jsonify, render_template, request, send_file, Response
 from flask_login import current_user, login_required
 
 from app.extensions import db
@@ -453,3 +453,22 @@ def profile():
         lc_badges=lc_badges,
         hr_badges=hr_badges,
     )
+
+
+@profile_bp.route('/export_csv')
+@login_required
+def export_csv():
+    """Export user progress as CSV."""
+    try:
+        all_questions = list(db.question.find())
+        topic_lookup = {t['_id']: t.get('name', '') for t in db.topic.find()}
+        csv_text = build_progress_csv(all_questions, topic_lookup, current_user.progress or {})
+        return Response(
+            csv_text,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': 'attachment; filename=progress.csv'
+            }
+        )
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
