@@ -56,37 +56,31 @@ def make_fake_db(existing=None, inserted=None):
 
     class FakeTopicCollection:
         @staticmethod
-        def create_index(*a, **kw):
-            pass
+        def create_index(*a, **kw): pass
 
         @staticmethod
-        def count_documents(*a, **kw):
-            return 1
+        def count_documents(*a, **kw): return 1
 
         @staticmethod
         def insert_one(*a, **kw):
             return SimpleNamespace(inserted_id="topic-1")
 
         @staticmethod
-        def insert_many(*a, **kw):
-            pass
+        def insert_many(*a, **kw): pass
 
     class FakeQuestionCollection:
         @staticmethod
-        def create_index(*a, **kw):
-            pass
+        def create_index(*a, **kw): pass
 
         @staticmethod
-        def count_documents(*a, **kw):
-            return 0
+        def count_documents(*a, **kw): return 0
 
         @staticmethod
         def insert_one(*a, **kw):
             return SimpleNamespace(inserted_id="q-1")
 
         @staticmethod
-        def insert_many(*a, **kw):
-            pass
+        def insert_many(*a, **kw): pass
 
     class FakeDB:
         user = FakeUserCollection()
@@ -117,6 +111,35 @@ def make_app(monkeypatch, db_override):
     return flask_app
 
 
+def _make_github_mock(token=True, user_ok=True):
+    mock = MagicMock()
+
+    mock.authorize_access_token = MagicMock(
+        return_value={"access_token": "tok"} if token else None
+    )
+
+    user_resp = MagicMock()
+    user_resp.ok = user_ok
+    user_resp.json = MagicMock(return_value=GITHUB_USER_INFO)
+
+    email_resp = MagicMock()
+    email_resp.status_code = 200
+    email_resp.json = MagicMock(return_value=GITHUB_EMAILS)
+
+    mock.get = MagicMock(
+        side_effect=lambda url: user_resp if url == "user" else email_resp
+    )
+    return mock
+
+
+def _make_google_mock(user_info=GOOGLE_USER_INFO):
+    mock = MagicMock()
+    mock.authorize_access_token = MagicMock(return_value={"access_token": "tok"})
+    mock.parse_id_token = MagicMock(return_value=user_info)
+    mock.userinfo = MagicMock(return_value=user_info)
+    return mock
+
+
 # ── GitHub Tests ──────────────────────────────────────────────────────────────
 
 def test_github_links_existing_email_user(monkeypatch):
@@ -126,13 +149,7 @@ def test_github_links_existing_email_user(monkeypatch):
     flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
-        with patch("app.auth.routes.github") as mock_github:
-            mock_github.authorize_access_token.return_value = {"access_token": "tok"}
-            mock_github.get.side_effect = lambda url: (
-                MagicMock(ok=True, json=lambda: GITHUB_USER_INFO)
-                if url == "user"
-                else MagicMock(status_code=200, json=lambda: GITHUB_EMAILS)
-            )
+        with patch("app.auth.routes.github", new=_make_github_mock()):
             resp = client.get("/login/github/authorize")
             assert resp.status_code == 302
             assert "github_id" in existing
@@ -145,13 +162,7 @@ def test_github_creates_new_user_when_no_match(monkeypatch):
     flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
-        with patch("app.auth.routes.github") as mock_github:
-            mock_github.authorize_access_token.return_value = {"access_token": "tok"}
-            mock_github.get.side_effect = lambda url: (
-                MagicMock(ok=True, json=lambda: GITHUB_USER_INFO)
-                if url == "user"
-                else MagicMock(status_code=200, json=lambda: GITHUB_EMAILS)
-            )
+        with patch("app.auth.routes.github", new=_make_github_mock()):
             resp = client.get("/login/github/authorize")
             assert resp.status_code == 302
             assert inserted.get("github_id") == str(GITHUB_USER_INFO["id"])
@@ -163,8 +174,7 @@ def test_github_missing_token_returns_400(monkeypatch):
     flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
-        with patch("app.auth.routes.github") as mock_github:
-            mock_github.authorize_access_token.return_value = None
+        with patch("app.auth.routes.github", new=_make_github_mock(token=False)):
             resp = client.get("/login/github/authorize")
             assert resp.status_code == 400
 
@@ -175,9 +185,7 @@ def test_github_failed_user_fetch_returns_400(monkeypatch):
     flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
-        with patch("app.auth.routes.github") as mock_github:
-            mock_github.authorize_access_token.return_value = {"access_token": "tok"}
-            mock_github.get.return_value = MagicMock(ok=False)
+        with patch("app.auth.routes.github", new=_make_github_mock(user_ok=False)):
             resp = client.get("/login/github/authorize")
             assert resp.status_code == 400
 
@@ -191,9 +199,7 @@ def test_google_links_existing_email_user(monkeypatch):
     flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
-        with patch("app.auth.routes.google") as mock_google:
-            mock_google.authorize_access_token.return_value = {"access_token": "tok"}
-            mock_google.parse_id_token.return_value = GOOGLE_USER_INFO
+        with patch("app.auth.routes.google", new=_make_google_mock()):
             resp = client.get("/login/google/authorize")
             assert resp.status_code == 302
             assert "google_id" in existing
@@ -206,9 +212,7 @@ def test_google_creates_new_user_when_no_match(monkeypatch):
     flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
-        with patch("app.auth.routes.google") as mock_google:
-            mock_google.authorize_access_token.return_value = {"access_token": "tok"}
-            mock_google.parse_id_token.return_value = GOOGLE_USER_INFO
+        with patch("app.auth.routes.google", new=_make_google_mock()):
             resp = client.get("/login/google/authorize")
             assert resp.status_code == 302
             assert inserted.get("google_id") == "google-999"
@@ -219,10 +223,12 @@ def test_google_missing_userinfo_returns_400(monkeypatch):
     db = make_fake_db()
     flask_app = make_app(monkeypatch, db)
 
+    mock = MagicMock()
+    mock.authorize_access_token = MagicMock(return_value={"access_token": "tok"})
+    mock.parse_id_token = MagicMock(return_value=None)
+    mock.userinfo = MagicMock(return_value=None)
+
     with flask_app.test_client() as client:
-        with patch("app.auth.routes.google") as mock_google:
-            mock_google.authorize_access_token.return_value = {"access_token": "tok"}
-            mock_google.parse_id_token.return_value = None
-            mock_google.userinfo.return_value = None
+        with patch("app.auth.routes.google", new=mock):
             resp = client.get("/login/google/authorize")
             assert resp.status_code in (302, 400)
