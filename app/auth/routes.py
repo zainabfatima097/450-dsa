@@ -9,6 +9,7 @@ from app.utils import utc_now
 
 
 auth_bp = Blueprint("auth", __name__)
+GOOGLE_OAUTH_NONCE_SESSION_KEY = "google_oauth_nonce"
 
 
 class UserWrapper(UserMixin):
@@ -198,13 +199,19 @@ def authorize_github():
 @auth_bp.route("/login/google")
 def login_google():
     redirect_uri = url_for("auth.authorize_google", _external=True)
-    return google.authorize_redirect(redirect_uri)
+    nonce = secrets.token_urlsafe(16)
+    session[GOOGLE_OAUTH_NONCE_SESSION_KEY] = nonce
+    return google.authorize_redirect(redirect_uri, nonce=nonce)
 
 
 @auth_bp.route("/login/google/authorize")
 def authorize_google():
+    nonce = session.pop(GOOGLE_OAUTH_NONCE_SESSION_KEY, None)
+    if not nonce:
+        return "Google OAuth nonce missing", 400
+
     token = google.authorize_access_token()
-    user_info = google.parse_id_token(token, nonce=session.get("nonce"))
+    user_info = google.parse_id_token(token, nonce=nonce)
     if not user_info:
         user_info = google.userinfo()
 
