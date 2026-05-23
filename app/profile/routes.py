@@ -24,35 +24,50 @@ from app.platforms.fetchers import (
 from app.utils import ensure_utc_datetime, normalize_coding_ninjas_profile_id, utc_now, compute_c_score, compute_user_platforms
 from streaks import compute_streak
 from profile_validation import build_profile_updates
+from card_generator import generate_progress_card
 
 profile_bp = Blueprint("profile", __name__)
 
 
-def build_sync_platforms_response(success, message=None, platforms=None, error=None):
+def build_sync_platforms_response(platform_status):
     """
     Build standardized response for platform sync operations.
     
     Args:
-        success (bool): Whether the sync was successful
-        message (str, optional): Success or info message
-        platforms (dict, optional): Dictionary with platform sync statuses
-        error (str, optional): Error message if success is False
+        platform_status (dict): Dictionary with platform sync statuses
     
     Returns:
-        dict: Standardized response dictionary
+        dict: Standardized response dictionary with success key
     """
-    response = {"success": success}
+    # Check if any platform was actually attempted (not skipped)
+    attempted = any(
+        status.get("status") in ["synced", "failed"] 
+        for status in platform_status.values()
+    )
     
-    if message:
-        response["message"] = message
-    if error:
-        response["error"] = error
-    if platforms:
-        response["platforms"] = platforms
-        # Check if any platform sync failed
-        if any(p.get("status") == "failed" for p in platforms.values()):
-            response["partial_success"] = True
+    # Check if all attempted platforms succeeded
+    all_success = all(
+        status.get("status") != "failed" 
+        for status in platform_status.values()
+        if status.get("status") in ["synced", "failed"]
+    )
     
+    # Create response with platform_status as base
+    response = dict(platform_status)
+    
+    # If no platforms were attempted, return False
+    if not attempted:
+        response["success"] = False
+        return response
+    
+    # If all attempted succeeded, return True
+    if all_success:
+        response["success"] = True
+        return response
+    
+    # Partial success
+    response["success"] = True
+    response["partial_success"] = True
     return response
 
 
@@ -72,7 +87,7 @@ def sync_platforms():
             remaining = int(600 - diff)
             mins = remaining // 60
             secs = remaining % 60
-            return jsonify(build_sync_platforms_response(False, error=f"Please wait {mins}m {secs}s before syncing again.", message=f"Rate limit: wait {mins}m {secs}s"))
+            return jsonify({"success": False, "error": f"Please wait {mins}m {secs}s before syncing again.", "message": f"Rate limit: wait {mins}m {secs}s"})
 
     update_fields = {"last_sync": now}
 
@@ -164,7 +179,7 @@ def sync_platforms():
     current_user.reload()
     
     message = "Sync completed! " + " | ".join(sync_results) if sync_results else "Sync completed successfully"
-    return jsonify(build_sync_platforms_response(True, message=message))
+    return jsonify({"success": True, "message": message})
 
 
 @profile_bp.route("/edit_profile", methods=["POST"])
@@ -212,7 +227,7 @@ def public_card(user_id):
         dsa_progress = user.get("dsa_progress", 0)
         current_streak = user.get("current_streak", 0)
         platforms = user.get("platforms", {})
-        from card_generator import generate_progress_card
+        
         img = generate_progress_card(name, c_score, dsa_progress, current_streak, platforms)
         img_io = BytesIO()
         img.save(img_io, 'PNG')
@@ -230,7 +245,11 @@ def search_universities():
     if len(query) < 2:
         return jsonify([])
     try:
-        response = requests.get(f"http://universities.hipolabs.com/search?name={query}", timeout=5)
+        response = requests.get(
+            "https://universities.hipolabs.com/search",
+            params={"name": query},
+            timeout=5
+        )
         if response.status_code == 200:
             data = response.json()
             seen = set()
