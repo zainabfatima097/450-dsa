@@ -23,10 +23,55 @@ GOOGLE_USER_INFO = {
 }
 
 
+def make_fake_db(existing=None, inserted=None):
+    class FakeUserCollection:
+        @staticmethod
+        def find_one(q):
+            if existing and q.get("email"):
+                return existing
+            if existing and q.get("github_id"):
+                return None
+            if existing and q.get("google_id"):
+                return None
+            if inserted and q.get("_id"):
+                return {**inserted, "_id": inserted.get("_id")}
+            return None
+
+        @staticmethod
+        def update_one(f, u):
+            if existing:
+                existing.update(u.get("$set", {}))
+
+        @staticmethod
+        def insert_one(doc):
+            doc["_id"] = ObjectId()
+            if inserted is not None:
+                inserted.update(doc)
+            return SimpleNamespace(inserted_id=doc.get("_id", ObjectId()))
+
+        @staticmethod
+        def update_many(f, u):
+            pass
+
+    class FakeDB:
+        user = FakeUserCollection()
+
+        class topic:
+            def create_index(self, *a, **kw): pass
+            def count_documents(self, *a, **kw): return 0
+
+        class question:
+            def create_index(self, *a, **kw): pass
+
+    return FakeDB()
+
+
 def make_app(monkeypatch, db_override):
     import app as app_module
+    import app.auth.routes as auth_routes
 
     monkeypatch.setattr(app_module, "db", db_override)
+    monkeypatch.setattr(auth_routes, "db", db_override)
     monkeypatch.setattr(app_module.mongo, "init_app", lambda a: None)
     monkeypatch.setattr(app_module.bcrypt, "init_app", lambda a: None)
     monkeypatch.setattr(app_module.login_manager, "init_app", lambda a: None)
@@ -47,33 +92,8 @@ def make_app(monkeypatch, db_override):
 def test_github_links_existing_email_user(monkeypatch):
     """GitHub OAuth links github_id to existing user with matching email."""
     existing = {"_id": EXISTING_USER_ID, "email": "test@example.com", "progress": {}}
-
-    class FakeDB:
-        class user:
-            @staticmethod
-            def find_one(q):
-                if q.get("github_id"):
-                    return None
-                if q.get("email"):
-                    return existing
-                return None
-
-            @staticmethod
-            def update_one(f, u):
-                existing.update(u.get("$set", {}))
-
-            @staticmethod
-            def insert_one(doc):
-                return SimpleNamespace(inserted_id=ObjectId())
-
-        class topic:
-            def create_index(self, *a, **kw): pass
-            def count_documents(self, *a, **kw): return 0
-
-        class question:
-            def create_index(self, *a, **kw): pass
-
-    flask_app = make_app(monkeypatch, FakeDB())
+    db = make_fake_db(existing=existing)
+    flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.github") as mock_github:
@@ -91,32 +111,8 @@ def test_github_links_existing_email_user(monkeypatch):
 def test_github_creates_new_user_when_no_match(monkeypatch):
     """GitHub OAuth creates a new user when no existing email or github_id match."""
     inserted = {}
-
-    class FakeDB:
-        class user:
-            @staticmethod
-            def find_one(q):
-                if q.get("_id"):
-                    return {**inserted, "_id": inserted.get("_id")}
-                return None
-
-            @staticmethod
-            def update_one(f, u): pass
-
-            @staticmethod
-            def insert_one(doc):
-                doc["_id"] = ObjectId()
-                inserted.update(doc)
-                return SimpleNamespace(inserted_id=doc["_id"])
-
-        class topic:
-            def create_index(self, *a, **kw): pass
-            def count_documents(self, *a, **kw): return 0
-
-        class question:
-            def create_index(self, *a, **kw): pass
-
-    flask_app = make_app(monkeypatch, FakeDB())
+    db = make_fake_db(inserted=inserted)
+    flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.github") as mock_github:
@@ -133,25 +129,8 @@ def test_github_creates_new_user_when_no_match(monkeypatch):
 
 def test_github_missing_token_returns_400(monkeypatch):
     """GitHub OAuth returns 400 when token is missing."""
-    import app as app_module
-
-    class FakeDB:
-        class user:
-            @staticmethod
-            def find_one(q): return None
-            @staticmethod
-            def update_one(f, u): pass
-            @staticmethod
-            def insert_one(doc): return SimpleNamespace(inserted_id=ObjectId())
-
-        class topic:
-            def create_index(self, *a, **kw): pass
-            def count_documents(self, *a, **kw): return 0
-
-        class question:
-            def create_index(self, *a, **kw): pass
-
-    flask_app = make_app(monkeypatch, FakeDB())
+    db = make_fake_db()
+    flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.github") as mock_github:
@@ -162,23 +141,8 @@ def test_github_missing_token_returns_400(monkeypatch):
 
 def test_github_failed_user_fetch_returns_400(monkeypatch):
     """GitHub OAuth returns 400 when user info fetch fails."""
-    class FakeDB:
-        class user:
-            @staticmethod
-            def find_one(q): return None
-            @staticmethod
-            def update_one(f, u): pass
-            @staticmethod
-            def insert_one(doc): return SimpleNamespace(inserted_id=ObjectId())
-
-        class topic:
-            def create_index(self, *a, **kw): pass
-            def count_documents(self, *a, **kw): return 0
-
-        class question:
-            def create_index(self, *a, **kw): pass
-
-    flask_app = make_app(monkeypatch, FakeDB())
+    db = make_fake_db()
+    flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.github") as mock_github:
@@ -193,33 +157,8 @@ def test_github_failed_user_fetch_returns_400(monkeypatch):
 def test_google_links_existing_email_user(monkeypatch):
     """Google OAuth links google_id to existing user with matching email."""
     existing = {"_id": EXISTING_USER_ID, "email": "test@example.com", "progress": {}}
-
-    class FakeDB:
-        class user:
-            @staticmethod
-            def find_one(q):
-                if q.get("google_id"):
-                    return None
-                if q.get("email"):
-                    return existing
-                return None
-
-            @staticmethod
-            def update_one(f, u):
-                existing.update(u.get("$set", {}))
-
-            @staticmethod
-            def insert_one(doc):
-                return SimpleNamespace(inserted_id=ObjectId())
-
-        class topic:
-            def create_index(self, *a, **kw): pass
-            def count_documents(self, *a, **kw): return 0
-
-        class question:
-            def create_index(self, *a, **kw): pass
-
-    flask_app = make_app(monkeypatch, FakeDB())
+    db = make_fake_db(existing=existing)
+    flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.google") as mock_google:
@@ -233,32 +172,8 @@ def test_google_links_existing_email_user(monkeypatch):
 def test_google_creates_new_user_when_no_match(monkeypatch):
     """Google OAuth creates a new user when no existing email or google_id match."""
     inserted = {}
-
-    class FakeDB:
-        class user:
-            @staticmethod
-            def find_one(q):
-                if q.get("_id"):
-                    return {**inserted, "_id": inserted.get("_id")}
-                return None
-
-            @staticmethod
-            def update_one(f, u): pass
-
-            @staticmethod
-            def insert_one(doc):
-                doc["_id"] = ObjectId()
-                inserted.update(doc)
-                return SimpleNamespace(inserted_id=doc["_id"])
-
-        class topic:
-            def create_index(self, *a, **kw): pass
-            def count_documents(self, *a, **kw): return 0
-
-        class question:
-            def create_index(self, *a, **kw): pass
-
-    flask_app = make_app(monkeypatch, FakeDB())
+    db = make_fake_db(inserted=inserted)
+    flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.google") as mock_google:
@@ -269,25 +184,10 @@ def test_google_creates_new_user_when_no_match(monkeypatch):
             assert inserted.get("google_id") == "google-999"
 
 
-def test_google_missing_userinfo_returns_500(monkeypatch):
-    """Google OAuth fails gracefully when userinfo is missing."""
-    class FakeDB:
-        class user:
-            @staticmethod
-            def find_one(q): return None
-            @staticmethod
-            def update_one(f, u): pass
-            @staticmethod
-            def insert_one(doc): return SimpleNamespace(inserted_id=ObjectId())
-
-        class topic:
-            def create_index(self, *a, **kw): pass
-            def count_documents(self, *a, **kw): return 0
-
-        class question:
-            def create_index(self, *a, **kw): pass
-
-    flask_app = make_app(monkeypatch, FakeDB())
+def test_google_missing_userinfo_returns_400(monkeypatch):
+    """Google OAuth returns 400 when userinfo is missing."""
+    db = make_fake_db()
+    flask_app = make_app(monkeypatch, db)
 
     with flask_app.test_client() as client:
         with patch("app.auth.routes.google") as mock_google:
@@ -295,4 +195,4 @@ def test_google_missing_userinfo_returns_500(monkeypatch):
             mock_google.parse_id_token.return_value = None
             mock_google.userinfo.return_value = None
             resp = client.get("/login/google/authorize")
-            assert resp.status_code in (302, 400, 500)
+            assert resp.status_code in (302, 400)
