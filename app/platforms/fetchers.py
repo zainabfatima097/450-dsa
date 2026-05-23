@@ -7,13 +7,41 @@ import requests
 from app.utils import normalize_coding_ninjas_profile_id
 
 
+LEETCODE_PROFILE_QUERY = """
+query userProfile($username: String!) {
+  matchedUser(username: $username) {
+    submitStatsGlobal {
+      acSubmissionNum {
+        difficulty
+        count
+      }
+    }
+    userCalendar {
+      submissionCalendar
+    }
+  }
+  userContestRanking(username: $username) {
+    attendedContestsCount
+    rating
+    globalRanking
+    topPercentage
+  }
+}
+"""
+
+
+def build_leetcode_profile_payload(username):
+    return {
+        "query": LEETCODE_PROFILE_QUERY,
+        "variables": {"username": username},
+    }
+
+
 def fetch_leetcode(username):
     try:
         response = requests.post(
             "https://leetcode.com/graphql",
-            json={
-                "query": f'{{ matchedUser(username: "{username}") {{ submitStatsGlobal {{ acSubmissionNum {{ difficulty count }} }} userCalendar {{ submissionCalendar }} }} userContestRanking(username: "{username}") {{ attendedContestsCount rating globalRanking topPercentage }} }}'
-            },
+            json=build_leetcode_profile_payload(username),
             timeout=8,
         )
         response_json = response.json().get("data", {})
