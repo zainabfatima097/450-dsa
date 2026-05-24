@@ -3,7 +3,7 @@ import werkzeug
 
 import app as app_module
 import app.auth.routes as auth_routes
-import app.public.routes as public_routes
+import app.web.routes as public_routes
 
 
 if not hasattr(werkzeug, "__version__"):
