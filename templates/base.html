@@ -128,7 +128,7 @@
             <a href="{{ url_for('tracker.index') }}" class="topbar-brand">450 DSA Cracker</a>
         </div>
         <div class="topbar-right">
-            <a href="#" class="pill-btn ui-btn ui-btn-secondary ui-btn-pill" id="monthly-rewind-btn" aria-label="Monthly Rewind">
+            <a href="/monthly-rewind" class="pill-btn ui-btn ui-btn-secondary ui-btn-pill" id="monthly-rewind-btn" aria-label="Monthly Rewind">
                 <i class="bi bi-rewind-fill" style="color: var(--accent);" aria-hidden="true"></i>
                 <span>Monthly Rewind</span>
             </a>
@@ -160,7 +160,7 @@
     {% if messages %}
     <div class="flash-messages" id="flash-container" role="alert" aria-live="polite">
         {% for category, message in messages %}
-        <div class="flash-alert {{ category }}" onclick="this.remove()" role="alert">
+        <div class="flash-alert {{ category }}" role="alert">
             <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}x-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}" aria-hidden="true"></i>
             {{ message }}
         </div>
@@ -178,16 +178,16 @@
     <footer class="site-footer" role="contentinfo">
         <div class="footer-links">
             <a href="/faq">FAQ</a>
-            <a href="#">Contact Us</a>
-            <a href="#">Privacy</a>
-            <a href="#">Timeline</a>
-            <a href="#">Terms</a>
-            <a href="#">Refund Policy</a>
+            <a href="/contact">Contact Us</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/timeline">Timeline</a>
+            <a href="/terms">Terms</a>
+            <a href="/refund">Refund Policy</a>
         </div>
         <div class="footer-socials">
-            <a href="#" aria-label="LinkedIn"><i class="bi bi-linkedin" aria-hidden="true"></i></a>
-            <a href="#" aria-label="X/Twitter"><i class="bi bi-twitter-x" aria-hidden="true"></i></a>
-            <a href="#" aria-label="Instagram"><i class="bi bi-instagram" aria-hidden="true"></i></a>
+            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><i class="bi bi-linkedin" aria-hidden="true"></i></a>
+            <a href="https://x.com" target="_blank" rel="noopener noreferrer" aria-label="X/Twitter"><i class="bi bi-twitter-x" aria-hidden="true"></i></a>
+            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><i class="bi bi-instagram" aria-hidden="true"></i></a>
         </div>
         <p class="footer-copy">&copy; 2026 450 DSA Cracker. All rights reserved.</p>
     </footer>
@@ -335,6 +335,19 @@
             if (fc) fc.style.opacity = '0', fc.style.transition = '0.5s', setTimeout(() => fc.remove(), 500);
         }, 4000);
 
+
+        // Dynamic click dismissal for flash alerts (Strict CSP)
+        document.addEventListener('DOMContentLoaded', () => {
+            const flashContainer = document.getElementById('flash-container');
+            if (flashContainer) {
+                flashContainer.addEventListener('click', (event) => {
+                    const alert = event.target.closest('.flash-alert');
+                    if (alert) {
+                        alert.remove();
+                    }
+                });
+            }
+        });
     </script>
     {% block scripts %}{% endblock %}
 </body>

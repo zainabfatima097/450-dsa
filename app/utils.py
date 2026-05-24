@@ -94,6 +94,24 @@ def platform_profile_url(username, platform):
     return "#"
 
 
+def safe_url_filter(url):
+    if not url:
+        return "#"
+    url_stripped = url.strip()
+    # Allow http/https only
+    if url_stripped.lower().startswith(("http://", "https://")):
+        return url_stripped
+    # If the URL contains other scheme characters like ':' or similar, reject it
+    # to avoid javascript:, data:, or any custom protocols
+    if ":" in url_stripped and not url_stripped.lower().startswith(("http://", "https://")):
+        return "#"
+    # If the url starts with //, prepend https:
+    if url_stripped.startswith("//"):
+        return "https:" + url_stripped
+    # Otherwise, treat it as a path/domain and prepend https://
+    return "https://" + url_stripped
+
+
 def parse_search_query(raw_query):
     return search_service.parse_search_query(raw_query)
 
