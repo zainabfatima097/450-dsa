@@ -5,7 +5,15 @@ from flask import jsonify
 
 from app.extensions import db
 from app.search import service as search_service
+import re
+from datetime import datetime, timezone
+from urllib.parse import quote_plus
 
+from app.extensions import db
+import requests
+from typing import Dict, List, Optional, Any
+import hashlib
+import hmac
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -215,13 +223,6 @@ def compute_user_platforms(solved_items, external_totals, all_questions):
 
     return platforms
 # ========== DISCORD WEBHOOK UTILITIES ==========
-import requests
-import re
-from flask import current_app
-from typing import Dict, List, Optional, Any
-from datetime import datetime
-import hashlib
-import hmac
 
 # Discord webhook URL validation pattern
 DISCORD_WEBHOOK_PATTERN = re.compile(

@@ -178,7 +178,7 @@ def create_app(config_class=None):
 
     # Initialize Discord webhook collection
     try:
-        from app.discord_webhook import DiscordWebhookConfig
+        from app.discord_webhook import DiscordWebhookConfig  # noqa: F401
         # Get the actual MongoDB database from mongo (not db proxy)
         actual_db = mongo.db
         # Ensure discord_webhooks collection exists

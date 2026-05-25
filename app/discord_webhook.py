@@ -24,7 +24,7 @@ class DiscordWebhookConfig:
         """Get a specific webhook by ID."""
         try:
             return DiscordWebhookConfig.get_collection().find_one({"_id": ObjectId(webhook_id)})
-        except:
+        except Exception:  # FIXED: Changed from bare except
             return None
     
     @staticmethod

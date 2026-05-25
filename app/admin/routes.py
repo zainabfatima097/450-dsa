@@ -11,6 +11,8 @@ from flask_login import current_user, login_required
 
 from app.decorators import admin_required
 from app.extensions import db
+from app.discord_webhook import DiscordWebhookConfig  # ADD THIS
+from app.utils import trigger_discord_event  # ADD THIS
 
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -183,8 +185,6 @@ def delete_user(user_id):
     flash(f"Deleted account for {display_name}.", "success")
     return redirect(url_for("admin.dashboard", q=search_term, page=page))
 # ========== DISCORD WEBHOOK MANAGEMENT ==========
-from app.discord_webhook import DiscordWebhookConfig
-from app.utils import trigger_discord_event
 
 @admin_bp.route("/discord-webhooks", methods=["GET"])
 @login_required
