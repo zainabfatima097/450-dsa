@@ -5,7 +5,8 @@ from flask_login import current_user, login_required
 from app.extensions import db
 from app.utils import utc_now
 from notes_export import build_topic_notes_markdown, topic_notes_filename
-
+from progress_export import build_progress_csv
+from app.utils import trigger_discord_event
 
 tracker_bp = Blueprint("tracker", __name__)
 
@@ -105,56 +106,7 @@ def export_topic_notes(topic_id):
 @tracker_bp.route("/update_question/<question_id>", methods=["POST"])
 @login_required
 def update_question(question_id):
-    """Update the authenticated user's progress for a question.
-    ---
-    tags:
-      - Tracker
-    parameters:
-      - name: question_id
-        in: path
-        type: string
-        required: true
-        description: MongoDB ObjectId of the question to update.
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            done:
-              type: boolean
-              description: Whether the question is completed.
-            bookmark:
-              type: boolean
-              description: Whether the question is bookmarked.
-            notes:
-              type: string
-              description: User notes for the question.
-    security:
-      - SessionAuth: []
-    responses:
-      200:
-        description: Question progress updated successfully.
-        schema:
-          type: object
-          properties:
-            success:
-              type: boolean
-              example: true
-      401:
-        description: Login required.
-      404:
-        description: Question not found.
-        schema:
-          type: object
-          properties:
-            success:
-              type: boolean
-              example: false
-            error:
-              type: string
-              example: Question not found
-    """
+    """Update the authenticated user's progress for a question."""
     try:
         question = db.question.find_one({"_id": ObjectId(question_id)})
     except Exception:
@@ -173,6 +125,20 @@ def update_question(question_id):
         if data["done"] and not existing.get("done"):
             update_fields[f"progress.{question_id}.timestamp"] = utc_now()
             message = f"✅ Marked '{question.get('problem', 'Question')}' as complete!"
+            
+            # CHECK MILESTONE AFTER MARKING COMPLETE
+            # Reload user to get updated progress
+            current_user.reload()
+            user_progress = current_user.progress
+            done_count = sum(1 for item in user_progress.values() if item.get("done"))
+            
+            # Milestones: 50, 100, 200
+            if done_count in [50, 100, 200]:
+                trigger_discord_event("milestone", {
+                    "user_name": current_user.name,
+                    "milestone": done_count,
+                    "total_solved": done_count
+                })
         elif not data["done"] and existing.get("done"):
             message = f"📝 Marked '{question.get('problem', 'Question')}' as incomplete"
         update_fields[f"progress.{question_id}.done"] = data["done"]
@@ -221,35 +187,13 @@ def bookmarks():
 @tracker_bp.route("/export/csv")
 @login_required
 def export_csv():
-    import csv
-    from io import StringIO
-    from flask import Response
-    
     questions = list(db.question.find())
     topic_ids = list({q.get('topic') for q in questions if q.get('topic')})
     topic_lookup = {
         topic['_id']: topic.get('name', 'Unknown')
         for topic in db.topic.find({'_id': {'$in': topic_ids}}, {'name': 1})
     }
-    
-    output = StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['Topic', 'Problem', 'Status', 'Bookmarked', 'Notes', 'Difficulty', 'URL', 'URL2'])
-    
-    for q in questions:
-        topic_name = topic_lookup.get(q.get('topic'), 'Unknown')
-        q_id = str(q['_id'])
-        progress = current_user.progress.get(q_id, {})
-        status = 'Done' if progress.get('done') else 'Pending'
-        bookmarked = 'Yes' if progress.get('bookmark') else 'No'
-        notes = progress.get('notes', '')
-        difficulty = q.get('difficulty', 'Medium')
-        
-        writer.writerow([
-            topic_name, q.get('problem', ''), status, bookmarked, 
-            notes, difficulty, q.get('url', ''), q.get('url2', '')
-        ])
-    
-    response = Response(output.getvalue(), mimetype='text/csv')
-    response.headers['Content-Disposition'] = 'attachment; filename=my_dsa_progress.csv'
+    csv_content = build_progress_csv(questions, topic_lookup, current_user.progress)
+    response = Response(csv_content, mimetype='text/csv')
+    response.headers['Content-Disposition'] = 'attachment; filename=progress.csv'
     return response

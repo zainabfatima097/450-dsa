@@ -11,7 +11,7 @@ from app.auth import auth_bp
 from app.faq import faq_bp
 from app.extensions import bcrypt, db, limiter, login_manager, mongo, oauth, cache
 from app.leaderboard import leaderboard_bp
-from app.public.routes import public_bp
+from app.web.routes import public_bp
 from app.profile import profile_bp
 from app.search import search_bp
 from app.tracker import tracker_bp
@@ -151,6 +151,21 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(public_bp)
 
+    # Initialize Discord webhook collection
+    try:
+        from app.discord_webhook import DiscordWebhookConfig
+        # Get the actual MongoDB database from mongo (not db proxy)
+        actual_db = mongo.db
+        # Ensure discord_webhooks collection exists
+        if "discord_webhooks" not in actual_db.list_collection_names():
+            actual_db.create_collection("discord_webhooks")
+            actual_db.discord_webhooks.create_index("created_at")
+            actual_db.discord_webhooks.create_index("is_active")
+            actual_db.discord_webhooks.create_index("events")
+        print("✅ Discord webhook collection ready")
+    except Exception as e:
+        print(f"⚠️ Discord webhook initialization skipped: {e}")
+
     @app.errorhandler(429)
     def ratelimit_handler(e):
         retry_after = getattr(e, 'retry_after', 60)
@@ -174,7 +189,5 @@ def create_app():
             "img-src 'self' data: https:;"
         )
         return response
-
-
 
     return app
