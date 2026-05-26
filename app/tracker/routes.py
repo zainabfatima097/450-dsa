@@ -4,7 +4,7 @@ from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.leaderboard.cache import invalidate_leaderboard_cache
-from app.utils import json_error, json_success, utc_now
+from app.utils import json_error, json_success, platform_from_question_url, utc_now
 from notes_export import build_all_notes_markdown, build_topic_notes_markdown, topic_notes_filename
 from progress_export import build_progress_csv
 
@@ -31,7 +31,7 @@ TOPIC_PAGE_QUESTION_PROJECTION = {
     "url2": 1,
 }
 TOPIC_NOTES_EXPORT_PROJECTION = {"problem": 1}
-QUESTION_STATUS_PROJECTION = {"problem": 1}
+QUESTION_STATUS_PROJECTION = {"problem": 1, "url": 1}
 BOOKMARKS_QUESTION_PROJECTION = {
     "topic": 1,
     "problem": 1,
@@ -242,20 +242,26 @@ def update_question(question_id):
     progress = current_user.progress
     existing = progress.get(question_id, {})
     message = ""
+    platform_count_field = f"in_sheet_platform_counts.{platform_from_question_url(question.get('url'))}"
 
     if "done" in data:
         if data["done"] and not existing.get("done"):
             update_fields[f"progress.{question_id}.timestamp"] = utc_now()
             message = f"✅ Marked '{question.get('problem', 'Question')}' as complete!"
             update_fields[f"progress.{question_id}.skipped"] = False
+            update_fields[platform_count_field] = 1
         elif not data["done"] and existing.get("done"):
             message = f"📝 Marked '{question.get('problem', 'Question')}' as incomplete"
+        if not data["done"] and existing.get("done"):
+            update_fields[platform_count_field] = -1
         update_fields[f"progress.{question_id}.done"] = data["done"]
 
     if "skipped" in data:
         if data["skipped"] and not existing.get("skipped"):
             message = f"⏭️ Marked '{question.get('problem', 'Question')}' as skipped for now"
             update_fields[f"progress.{question_id}.done"] = False
+            if existing.get("done"):
+                update_fields[platform_count_field] = -1
         elif not data["skipped"] and existing.get("skipped"):
             message = f"↩️ Removed skipped status for '{question.get('problem', 'Question')}'"
         update_fields[f"progress.{question_id}.skipped"] = data["skipped"]
@@ -272,7 +278,17 @@ def update_question(question_id):
         message = f"📝 Notes saved for '{question.get('problem', 'Question')}'!"
 
     if update_fields:
-        db.user.update_one({"_id": user_id}, {"$set": update_fields})
+        inc_fields = {
+            field: update_fields.pop(field)
+            for field in list(update_fields)
+            if field.startswith("in_sheet_platform_counts.")
+        }
+        update_doc = {}
+        if update_fields:
+            update_doc["$set"] = update_fields
+        if inc_fields:
+            update_doc["$inc"] = inc_fields
+        db.user.update_one({"_id": user_id}, update_doc)
         current_user.reload()
         invalidate_leaderboard_cache()
         return json_success(message=message)

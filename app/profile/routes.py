@@ -13,7 +13,14 @@ from app.profile.sync_service import (
     clear_profile_caches,
     sync_user_platforms,
 )
-from app.utils import json_error, json_success, utc_now, compute_user_platforms
+from app.utils import (
+    compute_in_sheet_platform_counts,
+    compute_user_platforms,
+    json_error,
+    json_success,
+    merge_platform_counts,
+    utc_now,
+)
 from profile_validation import build_profile_updates
 
 profile_bp = Blueprint("profile", __name__)
@@ -366,7 +373,12 @@ def profile():
     dsa_done = len(solved_items)
 
     ext_platform_totals = user.external_totals or {}
-    platforms = compute_user_platforms(solved_items, ext_platform_totals, all_questions)
+    if user.in_sheet_platform_counts:
+        platforms = merge_platform_counts(user.in_sheet_platform_counts, ext_platform_totals)
+    else:
+        in_sheet_counts = compute_in_sheet_platform_counts(solved_items, all_questions)
+        db.user.update_one({"_id": user.id}, {"$set": {"in_sheet_platform_counts": in_sheet_counts}})
+        platforms = merge_platform_counts(in_sheet_counts, ext_platform_totals)
 
     lc_easy = dsa_easy
     lc_medium = dsa_medium
