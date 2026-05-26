@@ -7,7 +7,7 @@ from flask_login import current_user, login_required
 from app.extensions import cache, db, limiter
 from app.leaderboard.cache import invalidate_leaderboard_cache
 from app.leaderboard.service import build_leaderboard_data, get_user_rank_by_c_score
-from app.profile.card_service import CACHE_TTL, get_public_card_image
+from app.profile.card_service import CACHE_TTL, get_public_card_image, warm_public_card_cache
 from app.profile.sync_service import (
     build_sync_platforms_response,
     clear_profile_caches,
@@ -18,7 +18,7 @@ from profile_validation import build_profile_updates
 
 profile_bp = Blueprint("profile", __name__)
 
-__all__ = ["CACHE_TTL", "build_sync_platforms_response", "get_public_card_image"]
+__all__ = ["CACHE_TTL", "build_sync_platforms_response", "get_public_card_image", "warm_public_card_cache"]
 
 UNIVERSITY_SEARCH_TIMEOUT_SECONDS = 5
 
@@ -91,6 +91,8 @@ def sync_platforms():
     if not isinstance(data, dict):
         return json_error("Request body must be a JSON object.", status_code=400)
     payload, status_code = sync_user_platforms(current_user, data, db, cache)
+    if payload.get("success"):
+        warm_public_card_cache(current_user.id, db_handle=db)
     return jsonify(payload), status_code
 
 
@@ -170,6 +172,7 @@ def edit_profile():
         current_user.reload()
         invalidate_leaderboard_cache()
         clear_profile_caches(cache, current_user.id)
+        warm_public_card_cache(current_user.id, db_handle=db)
     return json_success()
 
 

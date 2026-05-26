@@ -90,3 +90,12 @@ def get_public_card_image(user_id, object_id=None, db_handle=None):
 
     cache.set(f"card_{user_id}", (etag, img_io.getvalue()), timeout=CACHE_TTL)
     return img_io, etag, last_modified
+
+
+def warm_public_card_cache(user_id, db_handle=None):
+    """Generate and cache a user's public progress card after stats change."""
+    try:
+        get_public_card_image(str(user_id), db_handle=db_handle)
+        return True
+    except Exception:
+        return False
