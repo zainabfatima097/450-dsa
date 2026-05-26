@@ -66,6 +66,9 @@
     <a class="card-btn ui-btn ui-btn-secondary ui-btn-block" href="{{ url_for('tracker.export_csv') }}" aria-label="Export progress as CSV file">
       <i class="bi bi-download" style="margin-right:6px" aria-hidden="true"></i> Export Progress CSV
     </a>
+    <a class="card-btn ui-btn ui-btn-secondary ui-btn-block" href="{{ url_for('tracker.export_study_plan_ics') }}" aria-label="Export study plan calendar file">
+      <i class="bi bi-calendar-event" style="margin-right:6px" aria-hidden="true"></i> Export Study Calendar
+    </a>
     <div class="prof-bio">{{ user.bio or 'Software Engineer | Problem Solver | DSA Enthusiast' }}</div>
     <div class="social-row">
       {% if user.email %}<a href="mailto:{{ user.email }}" class="social-icon" title="Email" aria-label="Send email to {{ user.email }}"><i class="bi bi-envelope" aria-hidden="true"></i></a>{% endif %}
@@ -282,9 +285,14 @@
   <div class="card">
     <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Problems Solved</span>
-      <button onclick="handleQuickSync(this)" title="Sync Connected Platforms" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;transition:color 0.2s;display:flex;align-items:center" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'" aria-label="Sync connected platforms">
-        <i class="bi bi-arrow-clockwise" id="quickSyncIcon" aria-hidden="true"></i>
-      </button>
+      <div style="display:flex;gap:10px;">
+        <button onclick="exportChart('platformsChart', 'platforms-solved.png')" title="Export Chart as Image" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;transition:color 0.2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'" aria-label="Export platform chart">
+          <i class="bi bi-download" aria-hidden="true"></i>
+        </button>
+        <button onclick="handleQuickSync(this)" title="Sync Connected Platforms" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;transition:color 0.2s;display:flex;align-items:center" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'" aria-label="Sync connected platforms">
+          <i class="bi bi-arrow-clockwise" id="quickSyncIcon" aria-hidden="true"></i>
+        </button>
+      </div>
     </div>
 
     <!-- Fundamentals -->
@@ -323,7 +331,12 @@
     <hr style="border-color:var(--border-color);margin:16px 0">
 
     <!-- DSA difficulty -->
-    <div style="font-size:.8rem;font-weight:700;text-align:center;color:var(--text-secondary);margin-bottom:12px">DSA</div>
+    <div style="font-size:.8rem;font-weight:700;display:flex;justify-content:space-between;align-items:center;color:var(--text-secondary);margin-bottom:12px">
+      <span style="flex:1;text-align:center;padding-left:24px">DSA</span>
+      <button onclick="exportChart('difficultyChart', 'dsa-difficulty.png')" title="Export Chart as Image" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;transition:color 0.2s;width:24px" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'" aria-label="Export difficulty chart">
+        <i class="bi bi-download" aria-hidden="true"></i>
+      </button>
+    </div>
     <div class="donut-wrap chart-shell" id="difficultyChartShell">
       <div class="chart-skeleton" aria-hidden="true"></div>
       <canvas id="difficultyChart" aria-label="Difficulty distribution chart"></canvas>
@@ -347,7 +360,12 @@
     <hr style="border-color:var(--border-color);margin:16px 0">
 
     <!-- Contest Rankings -->
-    <div style="font-size:.8rem;font-weight:700;text-align:center;color:var(--text-secondary);margin-bottom:4px">Contest Rankings</div>
+    <div style="font-size:.8rem;font-weight:700;display:flex;justify-content:space-between;align-items:center;color:var(--text-secondary);margin-bottom:4px">
+      <span style="flex:1;text-align:center;padding-left:24px">Contest Rankings</span>
+      <button onclick="exportChart('progressChart', 'rating-history.png')" title="Export Chart as Image" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;transition:color 0.2s;width:24px" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'" aria-label="Export rating chart">
+        <i class="bi bi-download" aria-hidden="true"></i>
+      </button>
+    </div>
     <div style="font-size:.72rem;text-align:center;color:var(--text-muted);margin-bottom:10px;letter-spacing:.08em">LEETCODE</div>
     <div class="rating-wrap">
       <i class="bi bi-shield-shaded shield-icon" aria-hidden="true"></i>
@@ -619,9 +637,14 @@ window.handleSyncProfile = function(btn){
   });
 };
 
-// ── Chart & Visualization Code ──
 const dailyCounts = {{ daily_counts | tojson }};
 const heatmap = document.getElementById('heatmap');
+function exportChart(id,file){
+  const c=document.getElementById(id);if(!c)return;
+  const o=document.createElement('canvas'),x=o.getContext('2d'),a=document.createElement('a');
+  o.width=c.width;o.height=c.height;x.fillStyle='#1e2327';x.fillRect(0,0,o.width,o.height);x.drawImage(c,0,0);
+  a.download=file;a.href=o.toDataURL('image/png');a.click();
+}
 function markChartReady(id){
   const shell = document.getElementById(id);
   if (shell) shell.classList.add('is-ready');
@@ -646,12 +669,11 @@ const chartData = ratingHistory.length > 0 ? ratingHistory : cumData;
 if(chartData.length > 0 && chartCanvas && typeof Chart !== 'undefined'){
   new Chart(chartCanvas,{
     type:'line',
-    data:{labels:chartData.map(d=>d.x),datasets:[{data:chartData.map(d=>d.y),borderColor:'#f68b24',backgroundColor:'rgba(246,139,36,.15)',borderWidth:2,fill:true,tension:.4,pointRadius:ratingHistory.length>0?3:0,pointHoverRadius:5,pointBackgroundColor:'#f68b24'}]},
+    data:{labels:chartData.map(d=>d.x),datasets:[{data:chartData.map(d=>d.y),borderColor:'#f68b24',backgroundColor:'rgba(246,139,36,.15)',borderWidth:2,fill:true,tension:.4,pointRadius:ratingHistory.length>0?4:0,pointHoverRadius:6,pointBackgroundColor:'#f68b24'}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items[0].label,label:ctx=>ratingHistory.length>0?'Rating: '+ctx.raw:'Solved: '+ctx.raw}}},scales:{x:{grid:{display:false},ticks:{color:'#888',maxTicksLimit:5,font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#888',font:{size:10}}}}}
   });
   markChartReady('progressChartShell');
 } else if(chartCanvas && typeof Chart !== 'undefined') {
-  // Show empty state inside canvas area
   const ctx = chartCanvas.getContext('2d');
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.fillRect(0,0,chartCanvas.width,chartCanvas.height);

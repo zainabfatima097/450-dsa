@@ -4,7 +4,9 @@ from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.leaderboard.cache import invalidate_leaderboard_cache
+from app.profile.card_service import warm_public_card_cache
 from app.utils import json_error, json_success, platform_from_question_url, utc_now
+from calendar_export import build_study_plan_ics
 from notes_export import build_all_notes_markdown, build_topic_notes_markdown, topic_notes_filename
 from progress_export import build_progress_csv
 
@@ -291,6 +293,7 @@ def update_question(question_id):
         db.user.update_one({"_id": user_id}, update_doc)
         current_user.reload()
         invalidate_leaderboard_cache()
+        warm_public_card_cache(user_id, db_handle=db)
         return json_success(message=message)
 
     return json_success(message="No changes made")
@@ -330,6 +333,26 @@ def export_csv():
     csv_content = build_progress_csv(questions, topic_lookup, current_user.progress)
     response = Response(csv_content, mimetype='text/csv')
     response.headers['Content-Disposition'] = 'attachment; filename=progress.csv'
+    return response
+
+
+@tracker_bp.route("/export/study-plan.ics")
+@login_required
+def export_study_plan_ics():
+    topics = list(db.topic.find({}, {"name": 1, "position": 1}).sort("position", 1))
+    topic_ids = [topic["_id"] for topic in topics]
+    questions = list(db.question.find({"topic": {"$in": topic_ids}}, {"topic": 1}))
+
+    questions_by_topic = {}
+    for question in questions:
+        questions_by_topic.setdefault(question["topic"], []).append(question)
+
+    for topic in topics:
+        topic["questions"] = questions_by_topic.get(topic["_id"], [])
+
+    calendar_text = build_study_plan_ics(topics, current_user.progress)
+    response = Response(calendar_text, mimetype="text/calendar")
+    response.headers["Content-Disposition"] = "attachment; filename=study-plan.ics"
     return response
 
 
