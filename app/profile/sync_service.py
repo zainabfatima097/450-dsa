@@ -10,9 +10,9 @@ from app.platforms.fetchers import (
     fetch_lc_badges,
     fetch_leetcode,
     fetch_leetcode_rating_history,
+    run_fetch_jobs,
 )
 from app.utils import ensure_utc_datetime, normalize_coding_ninjas_profile_id, utc_now
-from platform_fetcher import run_fetch_jobs
 
 
 SYNC_COOLDOWN_SECONDS = 600
