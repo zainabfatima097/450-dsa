@@ -110,6 +110,10 @@ def question_links(question):
     return search_service.question_links(question)
 
 
+def question_editorial_links(question):
+    return search_service.question_editorial_links(question)
+
+
 def search_dsa_questions(raw_query, limit=40):
     return search_service.search_dsa_questions(raw_query, limit=limit, db_handle=db)
 
