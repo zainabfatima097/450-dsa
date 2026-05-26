@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 
@@ -159,6 +160,9 @@ def create_app(config_class=None):
 
     @app.before_request
     def ensure_db_initialized():
+        if request.endpoint == "health_check":
+            return None
+
         if not app._db_initialized:
             init_db()
             app._db_initialized = True
@@ -188,6 +192,13 @@ def create_app(config_class=None):
     @app.context_processor
     def inject_csrf_token():
         return {"csrf_token": csrf_token}
+
+    @app.get("/health")
+    def health_check():
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
     @app.route("/service-worker.js")
     def service_worker():
