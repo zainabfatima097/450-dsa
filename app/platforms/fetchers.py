@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import threading
 from datetime import datetime
@@ -7,6 +8,14 @@ import requests
 
 from app.utils import normalize_coding_ninjas_profile_id
 
+
+LEETCODE_REQUEST_TIMEOUT_SECONDS = 8
+LEETCODE_RATING_HISTORY_TIMEOUT_SECONDS = 10
+GITHUB_REQUEST_TIMEOUT_SECONDS = 5
+GFG_API_TIMEOUT_SECONDS = 6
+GFG_PAGE_TIMEOUT_SECONDS = 8
+ATCODER_REQUEST_TIMEOUT_SECONDS = 8
+CODING_NINJAS_REQUEST_TIMEOUT_SECONDS = 8
 
 _session_local = threading.local()
 
@@ -64,7 +73,7 @@ def fetch_leetcode(username):
         response = _get_http_session().post(
             "https://leetcode.com/graphql",
             json=build_leetcode_profile_payload(username),
-            timeout=8,
+            timeout=LEETCODE_REQUEST_TIMEOUT_SECONDS,
         )
         response_json = response.json().get("data", {})
         data = response_json.get("matchedUser", {})
@@ -111,7 +120,7 @@ def fetch_leetcode_rating_history(username):
         response = _get_http_session().post(
             "https://leetcode.com/graphql",
             json={"query": query, "variables": {"username": username}},
-            timeout=10,
+            timeout=LEETCODE_RATING_HISTORY_TIMEOUT_SECONDS,
             headers={"Content-Type": "application/json", "Referer": "https://leetcode.com"},
         )
         history_raw = response.json().get("data", {}).get("userContestRankingHistory", [])
@@ -140,7 +149,7 @@ def fetch_lc_badges(username):
         response = _get_http_session().post(
             "https://leetcode.com/graphql",
             json={"query": query, "variables": {"username": username}},
-            timeout=8,
+            timeout=LEETCODE_REQUEST_TIMEOUT_SECONDS,
             headers={"Content-Type": "application/json", "Referer": "https://leetcode.com"},
         )
         badges_raw = response.json().get("data", {}).get("matchedUser", {}).get("badges", [])
@@ -163,7 +172,7 @@ def fetch_hr_badges(username):
     try:
         response = _get_http_session().get(
             f"https://www.hackerrank.com/rest/hackers/{username}/badges",
-            timeout=8,
+            timeout=LEETCODE_REQUEST_TIMEOUT_SECONDS,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
         )
         if response.status_code == 200:
@@ -183,41 +192,66 @@ def fetch_hr_badges(username):
 
 def fetch_github(username):
     try:
-        response = _get_http_session().get(f"https://github.com/users/{username}/contributions", timeout=5)
+        response = _get_http_session().get(
+            f"https://github.com/users/{username}/contributions",
+            timeout=GITHUB_REQUEST_TIMEOUT_SECONDS,
+        )
         matches = re.findall(r"(\d+|No)\s+contributions?\s+on\s+(\d{4}-\d{2}-\d{2})", response.text)
         result_calendar = {}
         for count_str, date_str in matches:
             count = 0 if count_str == "No" else int(count_str)
             result_calendar[date_str] = count
 
-        response_issues = _get_http_session().get(
-            f"https://api.github.com/search/issues?q=type:issue+author:{username}",
-            timeout=5,
-        ).json()
-        response_prs = _get_http_session().get(
-            f"https://api.github.com/search/issues?q=type:pr+author:{username}",
-            timeout=5,
-        ).json()
-        response_merged = _get_http_session().get(
-            f"https://api.github.com/search/issues?q=type:pr+is:merged+author:{username}",
-            timeout=5,
-        ).json()
-        headers = {"Accept": "application/vnd.github.cloak-preview+json"}
-        response_commits = _get_http_session().get(
-            f"https://api.github.com/search/commits?q=author:{username}",
-            headers=headers,
-            timeout=5,
-        ).json()
+        auth_headers = {}
+        token = os.environ.get("GITHUB_TOKEN")
+        if token:
+            auth_headers["Authorization"] = f"token {token}"
 
-        stats = {
-            "issues": response_issues.get("total_count", 0),
-            "prs": response_prs.get("total_count", 0),
-            "merged_prs": response_merged.get("total_count", 0),
-            "commits": response_commits.get("total_count", 0),
-        }
+        def github_search_json(url, extra_headers=None):
+            headers = {**auth_headers, **(extra_headers or {})}
+            search_response = _get_http_session().get(
+                url,
+                headers=headers,
+                timeout=GITHUB_REQUEST_TIMEOUT_SECONDS,
+            )
+            if search_response.status_code in (403, 429):
+                return "rate_limited", None
+            if search_response.status_code != 200:
+                return "api_error", None
+            return None, search_response.json()
+
+        searches = [
+            (
+                "issues",
+                f"https://api.github.com/search/issues?q=type:issue+author:{username}",
+                None,
+            ),
+            (
+                "prs",
+                f"https://api.github.com/search/issues?q=type:pr+author:{username}",
+                None,
+            ),
+            (
+                "merged_prs",
+                f"https://api.github.com/search/issues?q=type:pr+is:merged+author:{username}",
+                None,
+            ),
+            (
+                "commits",
+                f"https://api.github.com/search/commits?q=author:{username}",
+                {"Accept": "application/vnd.github.cloak-preview+json"},
+            ),
+        ]
+
+        stats = {}
+        for key, url, extra_headers in searches:
+            error, payload = github_search_json(url, extra_headers)
+            if error:
+                return {"error": error, "calendar": result_calendar, "stats": None}
+            stats[key] = payload.get("total_count", 0)
 
         return {"calendar": result_calendar, "stats": stats}
-    except Exception as exc:
+    except requests.exceptions.RequestException as exc:
         print("GH Error", exc)
         return {}
 
@@ -228,7 +262,7 @@ def fetch_gfg(username):
         try:
             response = _get_http_session().get(
                 f"https://geeks-for-geeks-stats-api.vercel.app/?raw=Y&userName={username}",
-                timeout=6,
+                timeout=GFG_API_TIMEOUT_SECONDS,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -243,7 +277,7 @@ def fetch_gfg(username):
             response = _get_http_session().get(
                 f"https://practiceapi.geeksforgeeks.org/api/v1/user/practice/stats/?user={username}",
                 headers=headers,
-                timeout=6,
+                timeout=GFG_API_TIMEOUT_SECONDS,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -254,7 +288,11 @@ def fetch_gfg(username):
             print("GFG Error", exc)
 
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120"}
-        response = _get_http_session().get(f"https://www.geeksforgeeks.org/user/{username}/", timeout=8, headers=headers)
+        response = _get_http_session().get(
+            f"https://www.geeksforgeeks.org/user/{username}/",
+            timeout=GFG_PAGE_TIMEOUT_SECONDS,
+            headers=headers,
+        )
         for pattern in [
             r'"total_problems_solved"\s*[:=]\s*(\d+)',
             r'"totalProblemsSolved"\s*[:=]\s*(\d+)',
@@ -275,7 +313,9 @@ def fetch_atcoder(handle):
     try:
         r = _get_http_session().get(
             'https://kenkoooo.com/atcoder/atcoder-api/v3/user/acceptance_count',
-            params={'user': handle}, timeout=8)
+            params={'user': handle},
+            timeout=ATCODER_REQUEST_TIMEOUT_SECONDS,
+        )
         if r.status_code == 200:
             return {'total': r.json().get('count', 0)}
     except Exception as e:
@@ -296,7 +336,12 @@ def fetch_coding_ninjas(username):
 
     try:
         api_url = "https://www.naukri.com/code360/api/v3/public_section/profile/user_details"
-        response = _get_http_session().get(api_url, params={"uuid": profile_id}, headers=headers, timeout=8)
+        response = _get_http_session().get(
+            api_url,
+            params={"uuid": profile_id},
+            headers=headers,
+            timeout=CODING_NINJAS_REQUEST_TIMEOUT_SECONDS,
+        )
         if response.status_code == 200:
             data = response.json().get("data") or {}
             total = 0
@@ -326,7 +371,11 @@ def fetch_coding_ninjas(username):
     try:
         for url in urls:
             try:
-                response = _get_http_session().get(url, headers=headers, timeout=8)
+                response = _get_http_session().get(
+                    url,
+                    headers=headers,
+                    timeout=CODING_NINJAS_REQUEST_TIMEOUT_SECONDS,
+                )
                 if response.status_code != 200:
                     continue
                 for pattern in patterns:
