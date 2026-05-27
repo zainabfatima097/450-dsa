@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 
@@ -23,7 +24,13 @@ from app.security import (
 )
 from app.search import search_bp
 from app.tracker import tracker_bp
-from app.utils import platform_color_filter, platform_name_filter, platform_profile_url
+from app.utils import (
+    platform_color_filter,
+    platform_name_filter,
+    platform_profile_url,
+    question_editorial_links,
+    safe_url_filter,
+)
 
 
 ROUTE_TIMING_ENDPOINTS = {
@@ -59,7 +66,7 @@ def create_app(config_class=None):
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     config_class = config_class or resolve_config_class()
     app.config.from_object(config_class)
-    # Non-test environments must provide a real SECRET_KEY before the app boots.
+    # Non-test environments without a real SECRET_KEY use a temporary fallback.
     config_class.apply_environment_overrides(app)
     _configure_rate_limit_storage(app, config_class)
     app.config["SESSION_COOKIE_SECURE"] = env_flag(
@@ -126,12 +133,11 @@ def create_app(config_class=None):
         db.topic.create_index("position")
         db.question.create_index("topic")
         db.question.create_index([("problem", "text")], name="problem_text")
+        
+        # Lightweight schema backfill for legacy user documents.
+        db.user.update_many({"is_admin": {"$exists": False}}, {"$set": {"is_admin": False}})
     except Exception:
         pass
-
-    # Lightweight schema backfill for legacy user documents.
-    db.user.update_many({"is_admin": {"$exists": False}}, {"$set": {"is_admin": False}})
-
     data_path = Path(app.root_path).parent / "data.json"
     app._db_initialized = False
 
@@ -151,6 +157,7 @@ def create_app(config_class=None):
                             "problem": question["Problem"],
                             "url": question["URL"],
                             "url2": question.get("URL2", ""),
+                            "editorial_links": question_editorial_links(question),
                             "difficulty": difficulty,
                         }
                     )
@@ -159,9 +166,25 @@ def create_app(config_class=None):
 
     @app.before_request
     def ensure_db_initialized():
+        if request.endpoint == "health_check":
+            return None
+
         if not app._db_initialized:
             init_db()
             app._db_initialized = True
+
+    from app.platforms.metadata import PLATFORM_META
+
+    @app.template_filter("platform_badge")
+    def platform_badge_filter(name):
+        meta = PLATFORM_META.get(name)
+        if meta:
+            return meta["badge_class"]
+        return "badge-link"
+
+    @app.context_processor
+    def inject_platform_metadata():
+        return {"PLATFORM_META": PLATFORM_META}
 
     @app.before_request
     def start_route_timer():
@@ -184,10 +207,18 @@ def create_app(config_class=None):
     app.add_template_filter(platform_name_filter, "platform_name")
     app.add_template_filter(platform_color_filter, "platform_color")
     app.add_template_filter(platform_profile_url, "platform_url")
+    app.add_template_filter(safe_url_filter, "safe_url")
 
     @app.context_processor
     def inject_csrf_token():
         return {"csrf_token": csrf_token}
+
+    @app.get("/health")
+    def health_check():
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
     @app.route("/service-worker.js")
     def service_worker():

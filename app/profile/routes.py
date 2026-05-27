@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 
 import requests
 from flask import Blueprint, current_app, jsonify, render_template, request, send_file
@@ -6,20 +7,41 @@ from flask_login import current_user, login_required
 
 from app.extensions import cache, db, limiter
 from app.leaderboard.cache import invalidate_leaderboard_cache
-from app.profile.card_service import CACHE_TTL, get_public_card_image
+from app.leaderboard.service import build_leaderboard_data, get_user_rank_by_c_score
+from app.profile.card_service import CACHE_TTL, get_public_card_image, warm_public_card_cache
 from app.profile.sync_service import (
     build_sync_platforms_response,
     clear_profile_caches,
     sync_user_platforms,
 )
-from app.utils import json_error, json_success, utc_now, compute_user_platforms
+from app.utils import (
+    compute_in_sheet_platform_counts,
+    json_error,
+    json_success,
+    merge_platform_counts,
+    utc_now,
+)
 from profile_validation import build_profile_updates
 
 profile_bp = Blueprint("profile", __name__)
 
-__all__ = ["CACHE_TTL", "build_sync_platforms_response", "get_public_card_image"]
+__all__ = ["CACHE_TTL", "build_sync_platforms_response", "get_public_card_image", "warm_public_card_cache"]
 
 UNIVERSITY_SEARCH_TIMEOUT_SECONDS = 5
+HEATMAP_DAYS = 168
+
+
+def filter_heatmap_counts(daily_counts, today=None, days=HEATMAP_DAYS):
+    """Return only the daily counts rendered by the profile heatmap."""
+    today = today or utc_now().date()
+    start = today - timedelta(days=days - 1)
+    start_key = start.isoformat()
+    today_key = today.isoformat()
+    return {
+        day: count
+        for day, count in daily_counts.items()
+        if start_key <= day <= today_key
+    }
 
 
 @profile_bp.route("/sync_platforms", methods=["POST"])
@@ -90,6 +112,8 @@ def sync_platforms():
     if not isinstance(data, dict):
         return json_error("Request body must be a JSON object.", status_code=400)
     payload, status_code = sync_user_platforms(current_user, data, db, cache)
+    if payload.get("success"):
+        warm_public_card_cache(current_user.id, db_handle=db)
     return jsonify(payload), status_code
 
 
@@ -169,6 +193,7 @@ def edit_profile():
         current_user.reload()
         invalidate_leaderboard_cache()
         clear_profile_caches(cache, current_user.id)
+        warm_public_card_cache(current_user.id, db_handle=db)
     return json_success()
 
 
@@ -354,6 +379,7 @@ def profile():
             daily_counts[day] = daily_counts.get(day, 0) + count
 
     total_active_days = len(daily_counts)
+    heatmap_daily_counts = filter_heatmap_counts(daily_counts)
     sorted_dates = sorted(daily_counts.keys())
     cumulative_data = []
     cumulative_sum = 0
@@ -365,7 +391,12 @@ def profile():
     dsa_done = len(solved_items)
 
     ext_platform_totals = user.external_totals or {}
-    platforms = compute_user_platforms(solved_items, ext_platform_totals, all_questions)
+    if user.in_sheet_platform_counts:
+        platforms = merge_platform_counts(user.in_sheet_platform_counts, ext_platform_totals)
+    else:
+        in_sheet_counts = compute_in_sheet_platform_counts(solved_items, all_questions)
+        db.user.update_one({"_id": user.id}, {"$set": {"in_sheet_platform_counts": in_sheet_counts}})
+        platforms = merge_platform_counts(in_sheet_counts, ext_platform_totals)
 
     lc_easy = dsa_easy
     lc_medium = dsa_medium
@@ -412,6 +443,9 @@ def profile():
     except (json.JSONDecodeError, ValueError):
         print("Unable to handle hackerrank badges")
 
+    leaderboard_entries = build_leaderboard_data()
+    profile_leaderboard_rank = get_user_rank_by_c_score(user.id, leaderboard_entries)
+
     return render_template(
         "profile.html",
         user=user,
@@ -431,10 +465,11 @@ def profile():
         gh_prs=gh_prs,
         gh_merged=gh_merged,
         gh_commits=gh_commits,
-        daily_counts=daily_counts,
+        daily_counts=heatmap_daily_counts,
         cumulative_data=cumulative_data,
         total_active_days=total_active_days,
         rating_history=rating_history,
         lc_badges=lc_badges,
         hr_badges=hr_badges,
+        profile_leaderboard_rank=profile_leaderboard_rank,
     )

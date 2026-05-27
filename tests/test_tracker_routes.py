@@ -231,7 +231,9 @@ def test_topic_page_ignores_unknown_difficulty_filter(monkeypatch):
 
 def test_update_question_accepts_valid_boolean_update(monkeypatch):
     flask_app, test_db = build_test_app(monkeypatch, extra_db_targets=(tracker_routes,))
-    question_id = test_db.question.insert_one({"problem": "Two Sum"}).inserted_id
+    question_id = test_db.question.insert_one(
+        {"problem": "Two Sum", "url": "https://leetcode.com/problems/two-sum/"}
+    ).inserted_id
 
     with flask_app.test_client() as client:
         user_id = login_test_user(client, test_db)
@@ -243,15 +245,19 @@ def test_update_question_accepts_valid_boolean_update(monkeypatch):
     progress = user["progress"][str(question_id)]
     assert progress["done"] is True
     assert "timestamp" in progress
+    assert user["in_sheet_platform_counts"]["LeetCode"] == 1
 
 
 def test_update_question_sets_skipped_and_clears_done(monkeypatch):
     flask_app, test_db = build_test_app(monkeypatch, extra_db_targets=(tracker_routes,))
-    question_id = test_db.question.insert_one({"problem": "Two Sum"}).inserted_id
+    question_id = test_db.question.insert_one(
+        {"problem": "Two Sum", "url": "https://leetcode.com/problems/two-sum/"}
+    ).inserted_id
     user_id = test_db.user.insert_one(
         {
             "email": "user@example.com",
             "progress": {str(question_id): {"done": True, "skipped": False}},
+            "in_sheet_platform_counts": {"LeetCode": 1},
             "is_admin": False,
         }
     ).inserted_id
@@ -265,3 +271,93 @@ def test_update_question_sets_skipped_and_clears_done(monkeypatch):
     progress = user["progress"][str(question_id)]
     assert progress["skipped"] is True
     assert progress["done"] is False
+    assert user["in_sheet_platform_counts"]["LeetCode"] == 0
+
+
+# Offline queue sync tests
+
+def test_offline_queue_done_syncs_on_reconnect(monkeypatch):
+    """Queued 'done' change flushes successfully once back online."""
+    flask_app, test_db = build_test_app(monkeypatch, extra_db_targets=(tracker_routes,))
+    question_id = test_db.question.insert_one({"problem": "Binary Search"}).inserted_id
+
+    with flask_app.test_client() as client:
+        user_id = login_test_user(client, test_db)
+        response = client.post(f"/update_question/{question_id}", json={"done": True}, headers=csrf_headers(client))
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    user = test_db.user.find_one({"_id": user_id})
+    assert user["progress"][str(question_id)]["done"] is True
+
+
+def test_offline_queue_bookmark_syncs_on_reconnect(monkeypatch):
+    """Queued 'bookmark' change flushes successfully once back online."""
+    flask_app, test_db = build_test_app(monkeypatch, extra_db_targets=(tracker_routes,))
+    question_id = test_db.question.insert_one({"problem": "Merge Sort"}).inserted_id
+
+    with flask_app.test_client() as client:
+        user_id = login_test_user(client, test_db)
+        response = client.post(
+            f"/update_question/{question_id}", json={"bookmark": True}, headers=csrf_headers(client)
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    user = test_db.user.find_one({"_id": user_id})
+    assert user["progress"][str(question_id)]["bookmark"] is True
+
+
+def test_offline_queue_notes_syncs_on_reconnect(monkeypatch):
+    """Queued 'notes' change flushes successfully once back online."""
+    flask_app, test_db = build_test_app(monkeypatch, extra_db_targets=(tracker_routes,))
+    question_id = test_db.question.insert_one({"problem": "Linked List"}).inserted_id
+
+    with flask_app.test_client() as client:
+        user_id = login_test_user(client, test_db)
+        response = client.post(
+            f"/update_question/{question_id}",
+            json={"notes": "use slow/fast pointer"},
+            headers=csrf_headers(client),
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    user = test_db.user.find_one({"_id": user_id})
+    assert user["progress"][str(question_id)]["notes"] == "use slow/fast pointer"
+
+
+def test_offline_queue_merged_payload_syncs_on_reconnect(monkeypatch):
+    """Merged offline queue entry (done + bookmark + notes) flushes in one request."""
+    flask_app, test_db = build_test_app(monkeypatch, extra_db_targets=(tracker_routes,))
+    question_id = test_db.question.insert_one({"problem": "Graph BFS"}).inserted_id
+
+    merged_payload = {"done": True, "bookmark": True, "notes": "BFS uses a queue"}
+
+    with flask_app.test_client() as client:
+        user_id = login_test_user(client, test_db)
+        response = client.post(f"/update_question/{question_id}", json=merged_payload, headers=csrf_headers(client))
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    user = test_db.user.find_one({"_id": user_id})
+    progress = user["progress"][str(question_id)]
+    assert progress["done"] is True
+    assert progress["bookmark"] is True
+    assert progress["notes"] == "BFS uses a queue"
+
+
+def test_offline_queue_last_write_wins_conflict(monkeypatch):
+    """Second flush overwrites first; last-write-wins conflict resolution."""
+    flask_app, test_db = build_test_app(monkeypatch, extra_db_targets=(tracker_routes,))
+    question_id = test_db.question.insert_one({"problem": "DP Knapsack"}).inserted_id
+
+    with flask_app.test_client() as client:
+        user_id = login_test_user(client, test_db)
+        client.post(f"/update_question/{question_id}", json={"done": True}, headers=csrf_headers(client))
+        response = client.post(f"/update_question/{question_id}", json={"done": False}, headers=csrf_headers(client))
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    user = test_db.user.find_one({"_id": user_id})
+    assert user["progress"][str(question_id)]["done"] is False
